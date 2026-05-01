@@ -1,31 +1,38 @@
 # GlitchVJ
 
-Real-time audio-reactive glitch visuals generator built for live events. Custom WebGL2 shaders react to music in real time — bass, mids, highs, and beat detection drive every pixel on screen.
+Standalone VJ software for live events. Custom WebGL2 shaders react to music in real time — bass, mids, highs, and beat detection drive every pixel. Control UI inspired by Resolume with clip grid, layer management, MIDI learn, and independent output window for LED screens.
 
 **Built for [Earth Night Colima 2026](https://www.djs4ca.com/)** — to make the public dance, feel the music, and lose themselves in the visuals projected across 3 diamond-shaped LED panels.
-
 
 ## The Stack
 
 - **Runtime:** [Bun](https://bun.sh) (dev & build)
-- **App Shell:** [Electron](https://www.electronjs.org/) (cross-platform, portable .exe for Windows)
+- **App Shell:** [Electron](https://www.electronjs.org/) (macOS + Windows)
 - **Render:** WebGL2 with hand-written GLSL fragment shaders — no Three.js, no frameworks, raw GPU
 - **Audio:** Web Audio API with FFT analysis and custom beat detection
+- **MIDI:** Web MIDI API with manual learn mapping — works with any controller
 - **Language:** TypeScript
-- **VJ Integration:** Designed for capture by [Resolume Arena](https://resolume.com/) for LED mapping
+
+## Architecture
+
+GlitchVJ runs as two windows:
+
+- **Control window** — Resolume-style interface with clip grid, preview canvas, layer panel, audio meters, transport controls, MIDI mapping, and device selectors
+- **Output window** — Independent fullscreen WebGL renderer on a second monitor / LED screen. Has its own audio engine for zero-latency reactivity. No UI, no cursor — pure visuals
+
+Commands flow from control to output via Electron IPC. Both windows render independently so the output never drops frames because of UI interaction.
 
 ## Features
 
-- **13 presets** switchable via hotkeys — generative glitch, plasma, kaleidoscope, particles, tunnel, noise, chromatic aberration, strobe, and more
+- **14 presets** switchable via click, keyboard, or MIDI — generative glitch, plasma, kaleidoscope, particles, tunnel, noise, chromatic aberration, strobe, and more
+- **MAGIC! auto-pilot** — lava flow + auto-glitch + bass-triggered strobe. Set it and walk away for the entire night
 - **4 live camera presets** — point a camera at the crowd and glitch them in real time with ghost trails, acid warps, motion blur, and strobe silhouettes
-- **Crossfade transitions** — smooth 0.5s blend between presets with smoothstep easing, each shader keeps its own feedback trail during the fade
-- **Speed control** — scale shader time from 0.1x to 4.0x on the fly to match the energy of the set
-- **Beat detection** — dynamic threshold algorithm analyzes bass energy in real time, every visual reacts to the beat
-- **Audio-reactive uniforms** — bass, mid, high, volume, beat, and beat decay are passed to every shader every frame
-- **Live performance optimizations** — vsync disabled for lowest-latency capture, locked 1920x1080 render resolution, high-performance GPU forced, OS sleep blocked
-- **Always-on-top mode** — keep the visual window above all others for reliable Resolume window capture
-- **HUD overlay** — FPS, audio levels, beat indicator, audio/video device selectors, hotkey reference, flash messages for state changes
-- **Portable .exe** — single file, no installer, double-click and go
+- **Overlay system** — drag-drop PNG images and add text overlays. Resize, rotate, and position via sliders or directly on the preview canvas (drag to move, scroll to resize, shift+scroll to rotate)
+- **MIDI learn** — right-click any clip, button, or layer, then press a MIDI control to map it. Works with Launchpad, APC, any controller
+- **Crossfade transitions** — smooth 0.5s blend between presets with smoothstep easing
+- **Speed control** — scale shader time from 0.1x to 4.0x to match set energy
+- **Beat detection** — dynamic threshold algorithm analyzes bass energy, every visual reacts to the beat
+- **Production stable** — tested for 8+ hour sessions. No memory leaks, minimal GC pressure, audio streams properly cleaned up on device changes
 
 ## Quick Start
 
@@ -33,80 +40,111 @@ Real-time audio-reactive glitch visuals generator built for live events. Custom 
 # Install dependencies
 bun install
 
-# Run in development mode
+# Development mode (with hot reload and DevTools)
 bun run dev
+
+# Production mode (no dev server, no DevTools)
+bun run build && npx electron .
 ```
 
-This starts a dev server on `:5173` and opens an Electron window pointing to it.
+## Build for macOS
 
-## Build Windows .exe
+```bash
+bun run package:mac
+```
+
+Output: `release/` folder with `.dmg` installer. On Apple Silicon (M1/M2/M3/M4) it builds native arm64 by default.
+
+## Build for Windows
 
 ```bash
 bun run package:win
 ```
 
-Output: `release/GlitchVJ-1.0.0.exe` — portable, no installer needed. First build downloads Electron Windows binaries (~150MB).
+Output: `release/GlitchVJ-1.0.0.exe` — portable, no installer needed. Can be cross-compiled from macOS if Wine is installed, or built natively on Windows.
 
-## Running on Windows
+## Running a Live Event
 
-1. Copy `GlitchVJ-1.0.0.exe` to the target machine
-2. Double-click to run
-3. Allow microphone/camera access when prompted
+```bash
+bun run build && npx electron .
+```
 
-### Audio Loopback with VB-Cable
+1. Select your audio input (or use VB-Cable / BlackHole for system audio loopback)
+2. Select your camera if using camera presets
+3. Click **OUTPUT** to open the fullscreen output on your second monitor / LED screen
+4. Click clips to switch visuals, or use keyboard shortcuts / MIDI
 
-To capture system audio instead of mic input, install [VB-Cable](https://vb-audio.com/Cable/):
+### Tips for long sets
 
-1. Download and install VB-Cable
-2. Set `CABLE Input` as default playback device (Settings > Sound > Output)
-3. In GlitchVJ, select `CABLE Output` from the audio input dropdown
-4. System audio now routes through VB-Cable into GlitchVJ
+- **Close other apps** — especially Chrome, Spotify, anything GPU-heavy
+- **Enable Focus mode** — disable notifications so nothing pops over the output
+- **Plug in power** — don't let the laptop sleep or throttle
+- **Test beforehand** — run MAGIC! for 30 min on the actual LED screen to verify stability
 
-## Hotkeys
+### Audio Loopback
+
+To capture system audio instead of mic input:
+
+**macOS:** Install [BlackHole](https://existential.audio/blackhole/) and create a Multi-Output Device in Audio MIDI Setup
+
+**Windows:** Install [VB-Cable](https://vb-audio.com/Cable/), set `CABLE Input` as default playback, select `CABLE Output` in GlitchVJ
+
+## Controls
+
+### Clip Grid
+
+Click any clip to activate it. The active clip lights up green (cyan for camera presets, rainbow for MAGIC!).
+
+### Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `0` | Camera Glitch (webcam + datamosh + ghost trails) |
-| `Q` | Camera Acid (psychedelic warp + rainbow ghosts) |
-| `W` | Camera Blur (dreamy motion blur + smoke trails) |
-| `E` | Camera Strobe (silhouette flash + neon colors) |
-| `1` | Glitch (datamosh + RGB shift + scanlines) |
-| `2` | Plasma (audio-reactive plasma) |
-| `3` | Kaleidoscope (dynamic segments + glitch overlay) |
-| `4` | Particles (200-particle field, fragment shader) |
-| `5` | Tunnel (infinite zoom, bass = speed) |
-| `6` | Grid (distortion glitch per cell) |
-| `7` | Noise (VHS static, no signal) |
-| `8` | Chromatic (extreme chromatic aberration) |
-| `9` | Strobe (beat-synced flash — photosensitivity warning) |
+| `0` | Camera Glitch |
+| `Q` | Camera Acid |
+| `W` | Camera Blur |
+| `E` | Camera Strobe |
+| `1-9` | Shader presets |
 | `Space` | Random preset |
-| `B` | Manual beat trigger |
-| `H` | Toggle HUD |
+| `S` | Strobe flash |
+| `B` | Manual beat |
+| `M` | Toggle output window |
 | `F` | Toggle fullscreen |
-| `T` | Toggle always-on-top |
-| `+` / `-` | Speed up / slow down (0.1x steps) |
-| `Up` / `Down` | Speed up / slow down (0.25x jumps) |
+| `+` / `-` | Speed +/- 0.1x |
+| `Up` / `Down` | Speed +/- 0.25x |
 | `Right` | Reset speed to 1.0x |
-| `Esc` | Exit fullscreen |
+| `Shift+1-9` | Toggle overlay layer visibility |
+| `Esc` | Exit fullscreen / cancel MIDI learn |
 
-## Resolume Arena Integration
+### MIDI Learn
 
-1. Press `T` to enable always-on-top so the window stays visible for capture
-2. In Resolume, go to **Sources > Screen Capture** and select the GlitchVJ window
-3. GlitchVJ renders at a locked 1920x1080 — do slicing and mapping in Resolume's Advanced Output
-4. Vsync is disabled so Resolume always captures the freshest frame with minimal latency
+1. Right-click any clip, the STROBE/BEAT button, or a layer row
+2. A yellow "Waiting for MIDI..." banner appears
+3. Press any button/pad/knob on your MIDI controller
+4. That control is now mapped to that action
+5. Mapped controls show a badge (e.g., `N36`, `CC1`)
+
+Click **CLEAR** in the MIDI section to reset all mappings.
+
+### Overlay Editing
+
+On the preview canvas:
+- **Drag** to move overlays
+- **Scroll** to resize
+- **Shift+Scroll** to rotate
+
+Or click a layer name in the LAYERS panel and use the PROPERTIES sliders for precise control.
 
 ## Adding New Shaders
 
 1. Create a new `.frag` file in `src/renderer/shaders/` (GLSL ES 3.00)
 2. Add an entry to the `shaderFiles` array in `src/renderer/presets.ts`
-3. Optionally add a custom `key` binding in the preset definition
+3. Optionally add a custom `key` binding or `special: "magic"` for rainbow styling
 
 Every shader receives these uniforms automatically:
 
 ```glsl
 uniform vec2  u_resolution;  // canvas size in pixels
-uniform float u_time;         // seconds since start
+uniform float u_time;         // seconds since start (affected by speed control)
 uniform float u_bass;         // 0-1, low frequency energy
 uniform float u_mid;          // 0-1, mid frequency energy
 uniform float u_high;         // 0-1, high frequency energy
@@ -126,30 +164,33 @@ uniform sampler2D u_feedback;  // previous frame (for ghost trails)
 
 ```
 src/
-├── main/main.ts           # Electron main process
-├── preload/preload.ts     # Context bridge
+├── main/main.ts               # Electron main process, IPC relay
+├── preload/
+│   ├── preload.ts             # Control window bridge
+│   └── output-preload.ts     # Output window bridge
 └── renderer/
-    ├── index.html         # App shell
-    ├── main.ts            # Entry point, render loop, hotkeys
-    ├── audio.ts           # FFT analysis, beat detection
-    ├── renderer.ts        # WebGL2 setup, shader programs, webcam, feedback FBOs
-    ├── presets.ts          # Preset registry and key mappings
-    ├── ui.ts              # HUD overlay
-    ├── styles.css
+    ├── index.html             # Control UI
+    ├── output.html            # Output window (fullscreen canvas)
+    ├── main.ts                # Control logic, clip grid, MIDI, overlays
+    ├── output.ts              # Output renderer, receives IPC commands
+    ├── audio.ts               # FFT analysis, beat detection
+    ├── renderer.ts            # WebGL2 engine, crossfade, feedback FBOs
+    ├── overlays.ts            # Image/text overlay system
+    ├── midi.ts                # MIDI learn engine
+    ├── presets.ts             # Preset registry and key mappings
+    ├── styles.css             # Control UI styles
     └── shaders/
-        ├── 00_camera.frag
-        ├── 00_camera_acid.frag
-        ├── 00_camera_blur.frag
-        ├── 00_camera_strobe.frag
-        ├── 01_glitch.frag
-        ├── 02_plasma.frag
+        ├── 00_camera*.frag    # Live camera effect shaders
+        ├── 01_glitch.frag     # Datamosh + RGB shift
+        ├── 02_plasma.frag     # Audio-reactive plasma
         ├── 03_kaleidoscope.frag
         ├── 04_particles.frag
         ├── 05_tunnel.frag
         ├── 06_grid.frag
         ├── 07_noise.frag
         ├── 08_chromatic.frag
-        └── 09_strobe.frag
+        ├── 09_strobe.frag
+        └── 10_magic.frag     # Auto-pilot: lava + glitch + bass strobe
 ```
 
 ## License
