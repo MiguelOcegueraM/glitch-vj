@@ -26,6 +26,9 @@ function createWindow() {
     mainWindow?.show();
   });
 
+  // Debug: open DevTools to see shader/WebGL errors
+  mainWindow.webContents.openDevTools({ mode: "detach" });
+
   const isDev = process.argv.includes("--dev");
 
   if (isDev) {
