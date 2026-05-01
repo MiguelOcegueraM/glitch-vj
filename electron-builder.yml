@@ -1,0 +1,13 @@
+appId: com.mike.glitchvj
+productName: GlitchVJ
+directories:
+  output: release
+files:
+  - dist/**/*
+win:
+  target:
+    - target: portable
+      arch: [x64]
+  icon: build/icon.ico
+portable:
+  artifactName: GlitchVJ-${version}.exe

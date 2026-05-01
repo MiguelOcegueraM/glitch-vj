@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GlitchVJ</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="glcanvas"></canvas>
+  <div id="hud">
+    <div class="hud-title">GlitchVJ</div>
+    <div id="hud-preset">1 — GLITCH</div>
+    <div id="hud-fps">60 FPS</div>
+    <div class="hud-meters">
+      <div class="meter-row"><span class="meter-label">BASS</span><div class="meter-bar"><div class="meter-fill" id="meter-bass"></div></div></div>
+      <div class="meter-row"><span class="meter-label">MID</span><div class="meter-bar"><div class="meter-fill" id="meter-mid"></div></div></div>
+      <div class="meter-row"><span class="meter-label">HIGH</span><div class="meter-bar"><div class="meter-fill" id="meter-high"></div></div></div>
+    </div>
+    <div id="beat-indicator" class="beat-off"></div>
+    <div class="hud-section">
+      <label for="video-select">VIDEO INPUT</label>
+      <select id="video-select"></select>
+    </div>
+    <div class="hud-section">
+      <label for="audio-select">AUDIO INPUT</label>
+      <select id="audio-select"></select>
+    </div>
+    <div class="hud-keys">
+      <div>[0] Camera Glitch</div>
+      <div>[Q] Camera Acid</div>
+      <div>[W] Camera Blur</div>
+      <div>[E] Camera Strobe</div>
+      <div>[1-9] Presets</div>
+      <div>[Space] Random</div>
+      <div>[B] Manual Beat</div>
+      <div>[H] Toggle HUD</div>
+      <div>[F] Fullscreen</div>
+      <div>[Esc] Exit FS</div>
+    </div>
+    <div id="strobe-warning" class="hidden">⚠ STROBE ACTIVE</div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

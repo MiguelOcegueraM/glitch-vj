@@ -1,0 +1,22 @@
+{
+  "name": "glitchvj",
+  "version": "1.0.0",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "bun run build:main && bun run build:preload && concurrently \"bun run dev:renderer\" \"bun run dev:electron\"",
+    "dev:renderer": "bun run src/dev-server.ts",
+    "dev:electron": "sleep 2 && electron . --dev",
+    "build": "bun run build:renderer && bun run build:main && bun run build:preload",
+    "build:renderer": "bun build src/renderer/main.ts --outdir dist/renderer --target browser && cp src/renderer/index.html dist/renderer/ && cp src/renderer/styles.css dist/renderer/ && cp -r src/renderer/shaders dist/renderer/",
+    "build:main": "bun build src/main/main.ts --outdir dist/main --target node --external electron --format cjs",
+    "build:preload": "bun build src/preload/preload.ts --outdir dist/preload --target node --external electron --format cjs",
+    "package:win": "bun run build && electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

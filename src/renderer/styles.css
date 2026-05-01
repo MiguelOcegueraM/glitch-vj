@@ -1,0 +1,168 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  cursor: none;
+}
+
+#glcanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  color: #0f0;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 16px;
+  border: 1px solid #0f03;
+  border-radius: 4px;
+  z-index: 100;
+  pointer-events: none;
+  min-width: 220px;
+  user-select: none;
+}
+
+#hud.hidden {
+  display: none;
+}
+
+.hud-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  letter-spacing: 4px;
+}
+
+#hud-preset {
+  font-size: 15px;
+  margin-bottom: 4px;
+  color: #0ff;
+}
+
+#hud-fps {
+  margin-bottom: 10px;
+  color: #888;
+}
+
+.hud-meters {
+  margin-bottom: 10px;
+}
+
+.meter-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.meter-label {
+  width: 40px;
+  font-size: 11px;
+  color: #888;
+}
+
+.meter-bar {
+  flex: 1;
+  height: 8px;
+  background: #111;
+  border: 1px solid #333;
+}
+
+.meter-fill {
+  height: 100%;
+  width: 0%;
+  transition: width 0.05s linear;
+}
+
+#meter-bass .meter-fill,
+#meter-bass {
+  background: #f00;
+}
+
+#meter-mid .meter-fill,
+#meter-mid {
+  background: #0f0;
+}
+
+#meter-high .meter-fill,
+#meter-high {
+  background: #00f;
+}
+
+.meter-bar {
+  background: #111;
+}
+
+#beat-indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  margin-bottom: 10px;
+  border: 1px solid #0f0;
+}
+
+#beat-indicator.beat-on {
+  background: #0f0;
+  box-shadow: 0 0 12px #0f0;
+}
+
+#beat-indicator.beat-off {
+  background: transparent;
+}
+
+.hud-section {
+  margin-bottom: 10px;
+}
+
+.hud-section label {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 3px;
+}
+
+#audio-select,
+#video-select {
+  pointer-events: auto;
+  cursor: pointer;
+  width: 100%;
+  background: #111;
+  color: #0f0;
+  border: 1px solid #333;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  padding: 3px;
+}
+
+.hud-keys {
+  font-size: 11px;
+  color: #555;
+  line-height: 1.6;
+}
+
+#strobe-warning {
+  margin-top: 8px;
+  color: #f00;
+  font-weight: bold;
+  animation: blink 0.5s infinite;
+}
+
+#strobe-warning.hidden {
+  display: none;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
