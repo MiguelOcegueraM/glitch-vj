@@ -13,8 +13,10 @@ export class HUD {
   private audioSelect: HTMLSelectElement;
   private videoSelect: HTMLSelectElement;
   private strobeWarning: HTMLElement;
+  private flashEl: HTMLElement;
   private visible = true;
   private selectedVideoDeviceId: string | undefined;
+  private flashTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private audio: AudioEngine,
@@ -30,6 +32,7 @@ export class HUD {
     this.audioSelect = document.getElementById("audio-select") as HTMLSelectElement;
     this.videoSelect = document.getElementById("video-select") as HTMLSelectElement;
     this.strobeWarning = document.getElementById("strobe-warning")!;
+    this.flashEl = document.getElementById("flash-message")!;
 
     this.audioSelect.addEventListener("change", async () => {
       const deviceId = this.audioSelect.value;
@@ -103,6 +106,18 @@ export class HUD {
     this.presetEl.textContent = `[${label}] ${preset.name}`;
     const isStrobe = preset.id === "09_strobe" || preset.id === "00_camera_strobe";
     this.strobeWarning.classList.toggle("hidden", !isStrobe);
+  }
+
+  flashMessage(text: string) {
+    this.flashEl.textContent = text;
+    this.flashEl.classList.remove("hidden");
+    this.flashEl.classList.add("flash-visible");
+
+    if (this.flashTimeout) clearTimeout(this.flashTimeout);
+    this.flashTimeout = setTimeout(() => {
+      this.flashEl.classList.remove("flash-visible");
+      this.flashEl.classList.add("hidden");
+    }, 1200);
   }
 
   update() {

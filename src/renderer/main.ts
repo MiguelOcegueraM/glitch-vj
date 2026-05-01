@@ -8,6 +8,7 @@ declare global {
     electronAPI?: {
       toggleFullscreen: () => void;
       exitFullscreen: () => void;
+      toggleAlwaysOnTop: () => void;
     };
   }
 }
@@ -39,7 +40,7 @@ async function main() {
       } catch (e) {
         console.warn("Webcam failed:", e);
       }
-    } else {
+    } else if (!glRenderer.isCrossfading) {
       glRenderer.stopWebcam();
     }
   }
@@ -91,10 +92,37 @@ async function main() {
           }
         }
         break;
+      case "t":
+        if (window.electronAPI) {
+          window.electronAPI.toggleAlwaysOnTop();
+          hud.flashMessage("ALWAYS ON TOP");
+        }
+        break;
       case "escape":
         if (window.electronAPI) {
           window.electronAPI.exitFullscreen();
         }
+        break;
+      case "+":
+      case "=":
+        glRenderer.setSpeed(glRenderer.speed + 0.1);
+        hud.flashMessage(`SPEED ${glRenderer.speed.toFixed(1)}x`);
+        break;
+      case "-":
+        glRenderer.setSpeed(glRenderer.speed - 0.1);
+        hud.flashMessage(`SPEED ${glRenderer.speed.toFixed(1)}x`);
+        break;
+      case "arrowup":
+        glRenderer.setSpeed(glRenderer.speed + 0.25);
+        hud.flashMessage(`SPEED ${glRenderer.speed.toFixed(1)}x`);
+        break;
+      case "arrowdown":
+        glRenderer.setSpeed(glRenderer.speed - 0.25);
+        hud.flashMessage(`SPEED ${glRenderer.speed.toFixed(1)}x`);
+        break;
+      case "arrowright":
+        glRenderer.setSpeed(1.0);
+        hud.flashMessage("SPEED RESET 1.0x");
         break;
     }
   });
