@@ -3,7 +3,8 @@ productName: GlitchVJ
 directories:
   output: release
 files:
-  - dist/**/*
+  - "dist/**/*"
+  - "package.json"
 win:
   target:
     - target: portable

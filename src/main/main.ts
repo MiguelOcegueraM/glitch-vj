@@ -18,7 +18,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: path.join(__dirname, "..", "preload", "preload.js"),
+      preload: path.join(app.getAppPath(), "dist", "preload", "preload.js"),
     },
   });
 
@@ -34,7 +34,7 @@ function createWindow() {
   if (isDev) {
     mainWindow.loadURL("http://localhost:5173");
   } else {
-    mainWindow.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
+    mainWindow.loadFile(path.join(app.getAppPath(), "dist", "renderer", "index.html"));
   }
 
   ipcMain.on("toggle-fullscreen", () => {
