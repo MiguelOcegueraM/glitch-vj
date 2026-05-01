@@ -1,6 +1,11 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import * as path from "path";
 
+// Fix GPU issues on Windows (especially W11 + some drivers)
+app.commandLine.appendSwitch("enable-gpu-rasterization");
+app.commandLine.appendSwitch("enable-zero-copy");
+app.commandLine.appendSwitch("ignore-gpu-blocklist");
+
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow() {
@@ -8,6 +13,7 @@ function createWindow() {
     width: 1920,
     height: 1080,
     frame: false,
+    show: false,
     backgroundColor: "#000000",
     webPreferences: {
       contextIsolation: true,
@@ -16,13 +22,16 @@ function createWindow() {
     },
   });
 
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
+  });
+
   const isDev = process.argv.includes("--dev");
 
   if (isDev) {
     mainWindow.loadURL("http://localhost:5173");
   } else {
     mainWindow.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
-    // In production, dist/main/main.js loads dist/renderer/index.html
   }
 
   ipcMain.on("toggle-fullscreen", () => {
