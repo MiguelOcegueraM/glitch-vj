@@ -9,6 +9,20 @@
 <body>
   <canvas id="glcanvas"></canvas>
   <div id="flash-message" class="hidden"></div>
+
+  <!-- Text overlay input dialog -->
+  <div id="text-dialog" class="hidden">
+    <div class="text-dialog-inner">
+      <label>TEXT</label>
+      <input type="text" id="text-input" placeholder="Type here..." maxlength="100" autocomplete="off" />
+      <div class="text-dialog-row">
+        <label>COLOR</label>
+        <input type="color" id="text-color" value="#ffffff" />
+        <button id="text-submit">ADD</button>
+      </div>
+    </div>
+  </div>
+
   <div id="hud">
     <div class="hud-title">GlitchVJ</div>
     <div id="hud-preset">1 — GLITCH</div>
@@ -41,7 +55,18 @@
       <div>[+/-] Speed</div>
       <div>[&#8593;/&#8595;] Speed x0.25</div>
       <div>[&#8594;] Reset Speed</div>
-      <div>[Esc] Exit FS</div>
+      <div class="hud-separator"></div>
+      <div>[O] Overlay Edit</div>
+      <div>[A] Add Text*</div>
+      <div>[R] Rotate*</div>
+      <div>[V] Toggle Vis*</div>
+      <div>[Del] Remove*</div>
+      <div>[Scroll] Resize*</div>
+      <div>[Drag] Move*</div>
+      <div>[Drop PNG] Add Img</div>
+      <div class="hud-note">* overlay edit mode</div>
+      <div class="hud-separator"></div>
+      <div>[Esc] Exit FS/Edit</div>
     </div>
     <div id="strobe-warning" class="hidden">⚠ STROBE ACTIVE</div>
   </div>

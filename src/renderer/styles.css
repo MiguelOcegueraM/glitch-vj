@@ -197,3 +197,97 @@ html, body {
 #flash-message.hidden {
   display: none;
 }
+
+/* Overlay text input dialog */
+#text-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 300;
+}
+
+#text-dialog.hidden {
+  display: none;
+}
+
+.text-dialog-inner {
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid #0f0;
+  border-radius: 6px;
+  padding: 16px;
+  font-family: "Courier New", monospace;
+  color: #0f0;
+  min-width: 300px;
+}
+
+.text-dialog-inner label {
+  font-size: 11px;
+  color: #888;
+  display: block;
+  margin-bottom: 4px;
+}
+
+#text-input {
+  width: 100%;
+  background: #111;
+  color: #fff;
+  border: 1px solid #333;
+  font-family: "Courier New", monospace;
+  font-size: 16px;
+  padding: 8px;
+  margin-bottom: 10px;
+  outline: none;
+}
+
+#text-input:focus {
+  border-color: #0f0;
+}
+
+.text-dialog-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.text-dialog-row label {
+  margin-bottom: 0;
+}
+
+#text-color {
+  width: 32px;
+  height: 28px;
+  border: 1px solid #333;
+  background: #111;
+  cursor: pointer;
+  padding: 0;
+}
+
+#text-submit {
+  margin-left: auto;
+  background: #0f0;
+  color: #000;
+  border: none;
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 6px 16px;
+  cursor: pointer;
+  letter-spacing: 2px;
+}
+
+#text-submit:hover {
+  background: #0c0;
+}
+
+/* HUD additions */
+.hud-separator {
+  border-top: 1px solid #333;
+  margin: 4px 0;
+}
+
+.hud-note {
+  font-size: 10px;
+  color: #444;
+  font-style: italic;
+}

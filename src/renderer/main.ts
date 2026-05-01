@@ -2,6 +2,7 @@ import { AudioEngine } from "./audio";
 import { GLRenderer } from "./renderer";
 import { loadPresets, getKeyMap, type Preset } from "./presets";
 import { HUD } from "./ui";
+import { OverlayManager } from "./overlays";
 
 declare global {
   interface Window {
@@ -17,6 +18,7 @@ async function main() {
   const canvas = document.getElementById("glcanvas") as HTMLCanvasElement;
   const glRenderer = new GLRenderer(canvas);
   const audioEngine = new AudioEngine();
+  const overlays = new OverlayManager(canvas);
 
   // Load shaders
   const presets = await loadPresets();
@@ -59,19 +61,92 @@ async function main() {
   const defaultIdx = keyMap.get("1") ?? 0;
   await setPreset(defaultIdx);
 
+  // Text input dialog
+  function promptAddText() {
+    const input = document.getElementById("text-input") as HTMLInputElement;
+    const dialog = document.getElementById("text-dialog") as HTMLElement;
+    dialog.classList.remove("hidden");
+    input.value = "";
+    input.focus();
+
+    const submit = () => {
+      const text = input.value.trim();
+      if (text) {
+        const colorInput = document.getElementById("text-color") as HTMLInputElement;
+        overlays.addText(text, colorInput.value, 72);
+        hud.flashMessage("TEXT ADDED");
+      }
+      dialog.classList.add("hidden");
+      canvas.focus();
+    };
+
+    // One-shot handlers
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submit();
+        cleanup();
+      } else if (e.key === "Escape") {
+        dialog.classList.add("hidden");
+        canvas.focus();
+        cleanup();
+      }
+    };
+
+    const onBtn = () => {
+      submit();
+      cleanup();
+    };
+
+    const cleanup = () => {
+      input.removeEventListener("keydown", onKey);
+      document.getElementById("text-submit")?.removeEventListener("click", onBtn);
+    };
+
+    input.addEventListener("keydown", onKey);
+    document.getElementById("text-submit")?.addEventListener("click", onBtn);
+  }
+
   // Keyboard controls
   window.addEventListener("keydown", (e) => {
+    // Don't intercept keys when text dialog is open
+    const dialog = document.getElementById("text-dialog");
+    if (dialog && !dialog.classList.contains("hidden")) return;
+
     const key = e.key.toLowerCase();
 
-    // Check key map for preset bindings (0-9, q, w, e)
-    const presetIdx = keyMap.get(key);
-    if (presetIdx !== undefined) {
-      setPreset(presetIdx);
+    // Let overlay manager handle keys first in edit mode
+    if (overlays.handleKey(key, e.shiftKey)) {
+      e.preventDefault();
       return;
+    }
+
+    // Toggle overlay edit mode
+    if (key === "o") {
+      const isEdit = overlays.toggleEditMode();
+      hud.flashMessage(isEdit ? "OVERLAY EDIT ON" : "OVERLAY EDIT OFF");
+      return;
+    }
+
+    // Add text overlay (only in edit mode)
+    if (key === "a" && overlays.isEditMode) {
+      promptAddText();
+      return;
+    }
+
+    // Check key map for preset bindings (0-9, q, w, e)
+    // Skip preset keys in overlay edit mode to avoid accidental switches
+    if (!overlays.isEditMode) {
+      const presetIdx = keyMap.get(key);
+      if (presetIdx !== undefined) {
+        setPreset(presetIdx);
+        return;
+      }
     }
 
     switch (key) {
       case " ":
+        if (overlays.isEditMode) return;
         e.preventDefault();
         setPreset(Math.floor(Math.random() * presets.length));
         break;
@@ -93,13 +168,16 @@ async function main() {
         }
         break;
       case "t":
-        if (window.electronAPI) {
+        if (!overlays.isEditMode && window.electronAPI) {
           window.electronAPI.toggleAlwaysOnTop();
           hud.flashMessage("ALWAYS ON TOP");
         }
         break;
       case "escape":
-        if (window.electronAPI) {
+        if (overlays.isEditMode) {
+          overlays.toggleEditMode();
+          hud.flashMessage("OVERLAY EDIT OFF");
+        } else if (window.electronAPI) {
           window.electronAPI.exitFullscreen();
         }
         break;
@@ -137,6 +215,7 @@ async function main() {
     const now = performance.now() / 1000;
     audioEngine.update(now);
     glRenderer.render(audioEngine.data);
+    overlays.render(); // Overlay pass — after shader, before HUD
     hud.update();
     requestAnimationFrame(loop);
   }
