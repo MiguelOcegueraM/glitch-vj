@@ -18,9 +18,13 @@ Real-time audio-reactive glitch visuals generator built for live events. Custom 
 
 - **13 presets** switchable via hotkeys — generative glitch, plasma, kaleidoscope, particles, tunnel, noise, chromatic aberration, strobe, and more
 - **4 live camera presets** — point a camera at the crowd and glitch them in real time with ghost trails, acid warps, motion blur, and strobe silhouettes
+- **Crossfade transitions** — smooth 0.5s blend between presets with smoothstep easing, each shader keeps its own feedback trail during the fade
+- **Speed control** — scale shader time from 0.1x to 4.0x on the fly to match the energy of the set
 - **Beat detection** — dynamic threshold algorithm analyzes bass energy in real time, every visual reacts to the beat
 - **Audio-reactive uniforms** — bass, mid, high, volume, beat, and beat decay are passed to every shader every frame
-- **HUD overlay** — FPS, audio levels, beat indicator, audio/video device selectors, hotkey reference
+- **Live performance optimizations** — vsync disabled for lowest-latency capture, locked 1920x1080 render resolution, high-performance GPU forced, OS sleep blocked
+- **Always-on-top mode** — keep the visual window above all others for reliable Resolume window capture
+- **HUD overlay** — FPS, audio levels, beat indicator, audio/video device selectors, hotkey reference, flash messages for state changes
 - **Portable .exe** — single file, no installer, double-click and go
 
 ## Quick Start
@@ -79,13 +83,18 @@ To capture system audio instead of mic input, install [VB-Cable](https://vb-audi
 | `B` | Manual beat trigger |
 | `H` | Toggle HUD |
 | `F` | Toggle fullscreen |
+| `T` | Toggle always-on-top |
+| `+` / `-` | Speed up / slow down (0.1x steps) |
+| `Up` / `Down` | Speed up / slow down (0.25x jumps) |
+| `Right` | Reset speed to 1.0x |
 | `Esc` | Exit fullscreen |
 
 ## Resolume Arena Integration
 
-1. In Resolume, go to **Sources > Screen Capture**
-2. Select the GlitchVJ window
-3. For the LED panels: keep GlitchVJ at 1920x1080, do slicing and mapping in Resolume's Advanced Output
+1. Press `T` to enable always-on-top so the window stays visible for capture
+2. In Resolume, go to **Sources > Screen Capture** and select the GlitchVJ window
+3. GlitchVJ renders at a locked 1920x1080 — do slicing and mapping in Resolume's Advanced Output
+4. Vsync is disabled so Resolume always captures the freshest frame with minimal latency
 
 ## Adding New Shaders
 
