@@ -21,8 +21,9 @@ interface RenderTarget {
   height: number;
 }
 
-const RENDER_WIDTH = 1920;
-const RENDER_HEIGHT = 1080;
+// 720p saves 56% pixels vs 1080p — Resolume upscales with no visible loss on LED panels
+const RENDER_WIDTH = 1280;
+const RENDER_HEIGHT = 720;
 
 export class GLRenderer {
   private gl: WebGL2RenderingContext;

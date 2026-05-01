@@ -1,5 +1,5 @@
 #version 300 es
-precision highp float;
+precision mediump float;
 
 uniform vec2 u_resolution;
 uniform float u_time;
@@ -31,8 +31,8 @@ void main() {
 
   vec3 col = vec3(0.0);
 
-  // 200 particles
-  for (int i = 0; i < 200; i++) {
+  // 80 particles (optimized from 200 — still dense, much cheaper)
+  for (int i = 0; i < 80; i++) {
     float fi = float(i);
     vec2 pos = hash2(fi * 13.37);
 

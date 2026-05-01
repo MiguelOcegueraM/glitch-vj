@@ -7,8 +7,9 @@ const isDev = process.argv.includes("--dev");
 app.commandLine.appendSwitch("enable-gpu-rasterization");
 app.commandLine.appendSwitch("enable-zero-copy");
 app.commandLine.appendSwitch("ignore-gpu-blocklist");
-app.commandLine.appendSwitch("disable-frame-rate-limit");
-app.commandLine.appendSwitch("disable-gpu-vsync");
+// Let requestAnimationFrame cap at 60fps — unlimited wastes GPU cycles that Resolume needs
+// app.commandLine.appendSwitch("disable-frame-rate-limit");
+// app.commandLine.appendSwitch("disable-gpu-vsync");
 
 // Prevent OS sleep / screen dimming during live sets
 let powerBlockerId: number | null = null;

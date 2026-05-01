@@ -1,5 +1,5 @@
 #version 300 es
-precision highp float;
+precision mediump float;
 
 uniform vec2 u_resolution;
 uniform float u_time;
@@ -32,7 +32,7 @@ void main() {
 
   // Accumulate samples along the radial direction
   vec3 cam = vec3(0.0);
-  const int SAMPLES = 12;
+  const int SAMPLES = 6;
   for (int i = 0; i < SAMPLES; i++) {
     float offset = float(i) / float(SAMPLES) - 0.5;
     vec2 sampleUV = uv + dir * offset * blurAmount;
@@ -44,12 +44,12 @@ void main() {
   // Sample a wider blur for glow
   vec3 glow = vec3(0.0);
   float glowRadius = 0.01 + u_mid * 0.02;
-  for (int i = 0; i < 8; i++) {
-    float a = float(i) * 0.785398; // 2*PI/8
+  for (int i = 0; i < 4; i++) {
+    float a = float(i) * 1.5708; // 2*PI/4
     vec2 off = vec2(cos(a), sin(a)) * glowRadius;
     glow += texture(u_webcam, uv + off).rgb;
   }
-  glow /= 8.0;
+  glow /= 4.0;
 
   // Only add glow where bright (dreamy bloom)
   float brightness = dot(glow, vec3(0.333));
