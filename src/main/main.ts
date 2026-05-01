@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, powerSaveBlocker } from "electron";
+import { app, BrowserWindow, ipcMain, powerSaveBlocker, screen } from "electron";
 import * as path from "path";
 
 const isDev = process.argv.includes("--dev");
@@ -15,6 +15,7 @@ app.commandLine.appendSwitch("ignore-gpu-blocklist");
 let powerBlockerId: number | null = null;
 
 let mainWindow: BrowserWindow | null = null;
+let outputWindow: BrowserWindow | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -70,7 +71,66 @@ function createWindow() {
     mainWindow.setAlwaysOnTop(!current);
   });
 
+  // Output window: open on second monitor (or same if only one)
+  ipcMain.handle("toggle-output", () => {
+    if (outputWindow) {
+      outputWindow.close();
+      outputWindow = null;
+      return false;
+    }
+
+    if (!mainWindow) return false;
+
+    // Find the external display (prefer non-primary)
+    const displays = screen.getAllDisplays();
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const externalDisplay = displays.find((d) => d.id !== primaryDisplay.id);
+    const targetDisplay = externalDisplay || primaryDisplay;
+    const { x, y, width, height } = targetDisplay.bounds;
+
+    // Get the main window's media source ID for capture
+    const sourceId = mainWindow.getMediaSourceId();
+
+    outputWindow = new BrowserWindow({
+      x,
+      y,
+      width,
+      height,
+      frame: false,
+      fullscreen: true,
+      backgroundColor: "#000000",
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        preload: path.join(app.getAppPath(), "dist", "preload", "output-preload.js"),
+      },
+    });
+
+    if (isDev) {
+      outputWindow.loadURL("http://localhost:5173/output.html");
+    } else {
+      outputWindow.loadFile(path.join(app.getAppPath(), "dist", "renderer", "output.html"));
+    }
+
+    // Send the source ID once the output window is ready
+    outputWindow.webContents.once("did-finish-load", () => {
+      outputWindow?.webContents.send("set-source-id", sourceId);
+    });
+
+    outputWindow.on("closed", () => {
+      outputWindow = null;
+      // Notify main window that output closed
+      mainWindow?.webContents.send("output-closed");
+    });
+
+    return true;
+  });
+
   mainWindow.on("closed", () => {
+    if (outputWindow) {
+      outputWindow.close();
+      outputWindow = null;
+    }
     mainWindow = null;
   });
 }

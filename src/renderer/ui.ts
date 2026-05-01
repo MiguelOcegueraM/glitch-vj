@@ -2,6 +2,12 @@ import type { AudioEngine } from "./audio";
 import type { GLRenderer } from "./renderer";
 import type { Preset } from "./presets";
 
+interface LayerInfo {
+  id: number;
+  name: string;
+  visible: boolean;
+}
+
 export class HUD {
   private el: HTMLElement;
   private presetEl: HTMLElement;
@@ -14,9 +20,12 @@ export class HUD {
   private videoSelect: HTMLSelectElement;
   private strobeWarning: HTMLElement;
   private flashEl: HTMLElement;
+  private layersEl: HTMLElement;
+  private outputBadge: HTMLElement;
   private visible = true;
   private selectedVideoDeviceId: string | undefined;
   private flashTimeout: ReturnType<typeof setTimeout> | null = null;
+  private _outputMode = false;
 
   constructor(
     private audio: AudioEngine,
@@ -33,6 +42,8 @@ export class HUD {
     this.videoSelect = document.getElementById("video-select") as HTMLSelectElement;
     this.strobeWarning = document.getElementById("strobe-warning")!;
     this.flashEl = document.getElementById("flash-message")!;
+    this.layersEl = document.getElementById("hud-layers")!;
+    this.outputBadge = document.getElementById("output-badge")!;
 
     this.audioSelect.addEventListener("change", async () => {
       const deviceId = this.audioSelect.value;
@@ -43,7 +54,6 @@ export class HUD {
 
     this.videoSelect.addEventListener("change", async () => {
       this.selectedVideoDeviceId = this.videoSelect.value || undefined;
-      // If webcam is currently active, switch device live
       if (this.renderer.needsWebcam) {
         await this.renderer.startWebcam(this.selectedVideoDeviceId);
       }
@@ -57,7 +67,6 @@ export class HUD {
   async populateDevices() {
     const allDevices = await navigator.mediaDevices.enumerateDevices();
 
-    // Audio inputs
     const audioDevices = allDevices.filter((d) => d.kind === "audioinput");
     this.audioSelect.innerHTML = "";
     if (audioDevices.length === 0) {
@@ -73,7 +82,6 @@ export class HUD {
       }
     }
 
-    // Video inputs
     const videoDevices = allDevices.filter((d) => d.kind === "videoinput");
     this.videoSelect.innerHTML = "";
     if (videoDevices.length === 0) {
@@ -93,6 +101,11 @@ export class HUD {
   toggle() {
     this.visible = !this.visible;
     this.el.classList.toggle("hidden", !this.visible);
+  }
+
+  setOutputMode(active: boolean) {
+    this._outputMode = active;
+    this.outputBadge.classList.toggle("hidden", !active);
   }
 
   updatePreset(_index: number, preset: Preset) {
@@ -120,12 +133,27 @@ export class HUD {
     }, 1200);
   }
 
-  update() {
+  update(layers?: LayerInfo[]) {
     const data = this.audio.data;
     this.fpsEl.textContent = `${this.renderer.fps} FPS`;
     this.bassBar.style.width = `${data.bass * 100}%`;
     this.midBar.style.width = `${data.mid * 100}%`;
     this.highBar.style.width = `${data.high * 100}%`;
     this.beatEl.className = data.beat > 0.5 ? "beat-on" : "beat-off";
+
+    // Update layer display
+    if (layers && layers.length > 0) {
+      this.layersEl.classList.remove("hidden");
+      this.layersEl.innerHTML = layers
+        .map(
+          (l) =>
+            `<div class="layer-item ${l.visible ? "" : "layer-off"}">` +
+            `<span class="layer-vis">${l.visible ? "\u25CF" : "\u25CB"}</span> ${l.name}</div>`
+        )
+        .join("");
+    } else {
+      this.layersEl.classList.add("hidden");
+      this.layersEl.innerHTML = "";
+    }
   }
 }

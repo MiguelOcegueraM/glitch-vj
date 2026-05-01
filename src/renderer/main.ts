@@ -10,6 +10,8 @@ declare global {
       toggleFullscreen: () => void;
       exitFullscreen: () => void;
       toggleAlwaysOnTop: () => void;
+      toggleOutput: () => Promise<boolean>;
+      onOutputClosed: (callback: () => void) => void;
     };
   }
 }
@@ -19,6 +21,7 @@ async function main() {
   const glRenderer = new GLRenderer(canvas);
   const audioEngine = new AudioEngine();
   const overlays = new OverlayManager(canvas);
+  let outputActive = false;
 
   // Load shaders
   const presets = await loadPresets();
@@ -57,6 +60,14 @@ async function main() {
   const hud = new HUD(audioEngine, glRenderer);
   await hud.populateDevices();
 
+  // Listen for output window closing
+  if (window.electronAPI) {
+    window.electronAPI.onOutputClosed(() => {
+      outputActive = false;
+      hud.setOutputMode(false);
+    });
+  }
+
   // Start on GLITCH (first non-camera preset)
   const defaultIdx = keyMap.get("1") ?? 0;
   await setPreset(defaultIdx);
@@ -80,7 +91,6 @@ async function main() {
       canvas.focus();
     };
 
-    // One-shot handlers
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -114,6 +124,23 @@ async function main() {
     if (dialog && !dialog.classList.contains("hidden")) return;
 
     const key = e.key.toLowerCase();
+
+    // Shift+1 through Shift+9: toggle overlay layer visibility
+    if (e.shiftKey && key >= "1" && key <= "9") {
+      const idx = parseInt(key) - 1;
+      const result = overlays.toggleByIndex(idx);
+      if (result) {
+        hud.flashMessage(`${result.name} ${result.visible ? "ON" : "OFF"}`);
+      }
+      e.preventDefault();
+      return;
+    }
+
+    // Manual strobe — S key
+    if (key === "s") {
+      glRenderer.triggerStrobe();
+      return;
+    }
 
     // Let overlay manager handle keys first in edit mode
     if (overlays.handleKey(key, e.shiftKey)) {
@@ -173,6 +200,16 @@ async function main() {
           hud.flashMessage("ALWAYS ON TOP");
         }
         break;
+      case "m":
+        // Toggle output to second monitor
+        if (window.electronAPI) {
+          window.electronAPI.toggleOutput().then((opened) => {
+            outputActive = opened;
+            hud.setOutputMode(opened);
+            hud.flashMessage(opened ? "OUTPUT ON" : "OUTPUT OFF");
+          });
+        }
+        break;
       case "escape":
         if (overlays.isEditMode) {
           overlays.toggleEditMode();
@@ -216,7 +253,7 @@ async function main() {
     audioEngine.update(now);
     glRenderer.render(audioEngine.data);
     overlays.render(); // Overlay pass — after shader, before HUD
-    hud.update();
+    hud.update(overlays.getLayerInfo());
     requestAnimationFrame(loop);
   }
 

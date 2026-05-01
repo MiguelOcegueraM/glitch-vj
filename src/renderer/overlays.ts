@@ -253,6 +253,26 @@ void main() {
     if (sel) sel.visible = !sel.visible;
   }
 
+  // Toggle overlay visibility by index (0-based). Returns name/info or null.
+  toggleByIndex(index: number): { name: string; visible: boolean } | null {
+    if (index < 0 || index >= this.items.length) return null;
+    const item = this.items[index];
+    item.visible = !item.visible;
+    const name = item.type === "text" ? `"${item.text}"` : `IMG #${item.id}`;
+    return { name, visible: item.visible };
+  }
+
+  // Get layer info for HUD display
+  getLayerInfo(): { id: number; name: string; visible: boolean }[] {
+    return this.items.map((item, idx) => ({
+      id: item.id,
+      name: item.type === "text"
+        ? `${idx + 1}: "${(item.text ?? "").slice(0, 12)}"`
+        : `${idx + 1}: IMG #${item.id}`,
+      visible: item.visible,
+    }));
+  }
+
   // Convert screen pixel coords to normalized 0-1 coords
   private screenToNorm(clientX: number, clientY: number): { nx: number; ny: number } {
     const rect = this.canvas.getBoundingClientRect();

@@ -7,9 +7,9 @@
     "dev:renderer": "bun run src/dev-server.ts",
     "dev:electron": "sleep 2 && electron . --dev",
     "build": "bun run build:renderer && bun run build:main && bun run build:preload",
-    "build:renderer": "bun build src/renderer/main.ts --outdir dist/renderer --target browser && cp src/renderer/index.html dist/renderer/ && cp src/renderer/styles.css dist/renderer/ && cp -r src/renderer/shaders dist/renderer/",
+    "build:renderer": "bun build src/renderer/main.ts --outdir dist/renderer --target browser && bun build src/renderer/output.ts --outdir dist/renderer --target browser && cp src/renderer/index.html dist/renderer/ && cp src/renderer/output.html dist/renderer/ && cp src/renderer/styles.css dist/renderer/ && cp -r src/renderer/shaders dist/renderer/",
     "build:main": "bun build src/main/main.ts --outdir dist/main --target node --external electron --format cjs",
-    "build:preload": "bun build src/preload/preload.ts --outdir dist/preload --target node --external electron --format cjs",
+    "build:preload": "bun build src/preload/preload.ts --outdir dist/preload --target node --external electron --format cjs && bun build src/preload/output-preload.ts --outdir dist/preload --target node --external electron --format cjs",
     "package:win": "bun run build && electron-builder --win --x64"
   },
   "devDependencies": {

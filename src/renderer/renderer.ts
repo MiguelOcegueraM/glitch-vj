@@ -51,6 +51,10 @@ export class GLRenderer {
   // Feedback (ping-pong for ghost trails)
   private feedback: FeedbackPass | null = null;
 
+  // Manual strobe
+  private strobeAlpha = 0;
+  private strobeShader: ShaderProgram | null = null;
+
   // Crossfade
   private crossfadeDuration = 0.5; // seconds
   private crossfadeProgress = 1.0; // 1.0 = fully on current, no fade active
@@ -66,6 +70,15 @@ export class GLRenderer {
 in vec2 a_position;
 void main() {
   gl_Position = vec4(a_position, 0.0, 1.0);
+}`;
+
+  // Solid color strobe shader
+  private strobeFrag = `#version 300 es
+precision mediump float;
+uniform float u_alpha;
+out vec4 fragColor;
+void main() {
+  fragColor = vec4(1.0, 1.0, 1.0, u_alpha);
 }`;
 
   // Simple crossfade fragment shader
@@ -98,6 +111,7 @@ void main() {
     this.setupQuad();
     this.resize();
     this.compileCrossfadeShader();
+    this.compileStrobeShader();
   }
 
   private setupQuad() {
@@ -273,6 +287,35 @@ void main() {
 
   setSpeed(speed: number) {
     this.timeSpeed = Math.max(0.1, Math.min(4.0, speed));
+  }
+
+  triggerStrobe() {
+    this.strobeAlpha = 1.0;
+  }
+
+  private compileStrobeShader() {
+    const gl = this.gl;
+
+    const vs = gl.createShader(gl.VERTEX_SHADER)!;
+    gl.shaderSource(vs, this.vertexSrc);
+    gl.compileShader(vs);
+
+    const fs = gl.createShader(gl.FRAGMENT_SHADER)!;
+    gl.shaderSource(fs, this.strobeFrag);
+    gl.compileShader(fs);
+
+    const program = gl.createProgram()!;
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.bindAttribLocation(program, 0, "a_position");
+    gl.linkProgram(program);
+
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+
+    const uniforms: Record<string, WebGLUniformLocation | null> = {};
+    uniforms.u_alpha = gl.getUniformLocation(program, "u_alpha");
+    this.strobeShader = { program, uniforms };
   }
 
   private compileCrossfadeShader() {
@@ -514,6 +557,24 @@ void main() {
       this.prevProgram = null;
       this.prevProgramId = "";
       this.renderShader(prog, this.currentProgramId, audio, null, this.feedback!);
+    }
+
+    // Manual strobe flash (renders on top of everything)
+    if (this.strobeAlpha > 0.01) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+      gl.useProgram(this.strobeShader!.program);
+      gl.uniform1f(this.strobeShader!.uniforms.u_alpha, this.strobeAlpha);
+
+      gl.bindVertexArray(this.vao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.bindVertexArray(null);
+
+      gl.disable(gl.BLEND);
+
+      // Fast decay
+      this.strobeAlpha *= Math.exp(-dt * 12);
     }
   }
 }
