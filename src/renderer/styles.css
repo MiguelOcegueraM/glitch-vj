@@ -735,6 +735,20 @@ html, body {
   flex-shrink: 0;
 }
 
+/* ── Color grade controls ── */
+#color-section {
+  border-bottom: 1px solid #1a1a1a;
+  padding-bottom: 8px;
+}
+
+.label-r { color: #f44 !important; }
+.label-g { color: #4f4 !important; }
+.label-b { color: #44f !important; }
+
+.slider-r::-webkit-slider-thumb { background: #f44 !important; }
+.slider-g::-webkit-slider-thumb { background: #4f4 !important; }
+.slider-b::-webkit-slider-thumb { background: #44f !important; }
+
 /* Layer row selected state */
 .layer-row.selected {
   background: #1a1a0a;

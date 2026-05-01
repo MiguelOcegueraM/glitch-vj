@@ -274,6 +274,8 @@ async function main() {
         videoDeviceId: getSelectedVideoDeviceId(),
       });
       sendOutput("set-speed", { speed: glRenderer.speed });
+      const [cr, cg, cb] = glRenderer.getRGB();
+      sendOutput("set-color-grade", { brightness: glRenderer.getBrightness(), r: cr, g: cg, b: cb });
       syncOverlaysToOutput();
     });
   }
@@ -577,6 +579,31 @@ async function main() {
       sendOutput("set-speed", { speed: glRenderer.speed });
     });
   });
+
+  // ── Color grade controls ──
+  function syncColorGrade() {
+    const b = parseInt((document.getElementById("ctrl-brightness") as HTMLInputElement).value) / 100;
+    const r = parseInt((document.getElementById("ctrl-r") as HTMLInputElement).value) / 100;
+    const g = parseInt((document.getElementById("ctrl-g") as HTMLInputElement).value) / 100;
+    const bl = parseInt((document.getElementById("ctrl-b") as HTMLInputElement).value) / 100;
+    glRenderer.setBrightness(b);
+    glRenderer.setRGB(r, g, bl);
+    sendOutput("set-color-grade", { brightness: b, r, g, b: bl });
+  }
+
+  document.getElementById("ctrl-brightness")!.addEventListener("input", (e) => {
+    const v = (e.target as HTMLInputElement).value;
+    document.getElementById("ctrl-brightness-val")!.textContent = `${v}%`;
+    syncColorGrade();
+  });
+
+  for (const ch of ["r", "g", "b"]) {
+    document.getElementById(`ctrl-${ch}`)!.addEventListener("input", (e) => {
+      const v = (e.target as HTMLInputElement).value;
+      document.getElementById(`ctrl-${ch}-val`)!.textContent = `${v}%`;
+      syncColorGrade();
+    });
+  }
 
   // ── MIDI ──
   const midiSelect = document.getElementById("midi-select") as HTMLSelectElement;

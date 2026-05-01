@@ -94,6 +94,31 @@
         <span id="output-status" class="output-off">OFF</span>
       </div>
 
+      <!-- Color grade controls -->
+      <div id="color-section">
+        <div class="panel-header">COLOR</div>
+        <div class="prop-row">
+          <label>BRIGHT</label>
+          <input type="range" id="ctrl-brightness" min="0" max="100" value="100" />
+          <span id="ctrl-brightness-val">100%</span>
+        </div>
+        <div class="prop-row">
+          <label class="label-r">R</label>
+          <input type="range" id="ctrl-r" min="0" max="100" value="100" class="slider-r" />
+          <span id="ctrl-r-val">100%</span>
+        </div>
+        <div class="prop-row">
+          <label class="label-g">G</label>
+          <input type="range" id="ctrl-g" min="0" max="100" value="100" class="slider-g" />
+          <span id="ctrl-g-val">100%</span>
+        </div>
+        <div class="prop-row">
+          <label class="label-b">B</label>
+          <input type="range" id="ctrl-b" min="0" max="100" value="100" class="slider-b" />
+          <span id="ctrl-b-val">100%</span>
+        </div>
+      </div>
+
       <div id="layers-section">
         <div class="panel-header">LAYERS
           <button id="btn-add-text" class="small-btn" title="Add text overlay">+ TXT</button>

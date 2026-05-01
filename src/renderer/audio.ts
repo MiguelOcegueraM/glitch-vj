@@ -47,9 +47,10 @@ export class AudioEngine {
       this.stream = null;
     }
     if (this.ctx) {
-      this.ctx.close();
+      await this.ctx.close();
     }
 
+    this.beatTimestamp = performance.now() / 1000;
     this.ctx = new AudioContext();
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 2048;

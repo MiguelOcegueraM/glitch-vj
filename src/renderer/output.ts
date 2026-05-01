@@ -94,6 +94,11 @@ async function main() {
           overlays.setRotationByIndex(data.index, data.rotation);
           break;
         }
+        case "set-color-grade": {
+          glRenderer.setBrightness(data.brightness);
+          glRenderer.setRGB(data.r, data.g, data.b);
+          break;
+        }
       }
     });
 

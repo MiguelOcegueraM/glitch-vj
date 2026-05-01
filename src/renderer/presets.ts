@@ -26,6 +26,13 @@ export const shaderFiles: PresetDef[] = [
   { id: "08_chromatic", name: "CHROMATIC" },
   { id: "09_strobe", name: "STROBE" },
   { id: "10_magic", name: "MAGIC!", special: "magic" },
+  { id: "11_melt", name: "MELT" },
+  { id: "12_fractal", name: "FRACTAL" },
+  { id: "13_matrix", name: "MATRIX" },
+  { id: "14_void", name: "VOID" },
+  { id: "15_acid", name: "ACID" },
+  { id: "16_shatter", name: "SHATTER" },
+  { id: "17_warp", name: "WARP" },
 ];
 
 export function getKeyMap(): Map<string, number> {

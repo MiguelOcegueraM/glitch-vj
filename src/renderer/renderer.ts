@@ -55,6 +55,11 @@ export class GLRenderer {
   private strobeAlpha = 0;
   private strobeShader: ShaderProgram | null = null;
 
+  // Color grade (master dimmer + RGB tint)
+  private colorGradeShader: ShaderProgram | null = null;
+  private brightness = 1.0;
+  private rgbTint: [number, number, number] = [1.0, 1.0, 1.0];
+
   // Crossfade
   private crossfadeDuration = 0.5; // seconds
   private crossfadeProgress = 1.0; // 1.0 = fully on current, no fade active
@@ -79,6 +84,15 @@ uniform float u_alpha;
 out vec4 fragColor;
 void main() {
   fragColor = vec4(1.0, 1.0, 1.0, u_alpha);
+}`;
+
+  // Color grade shader — multiplied over the framebuffer
+  private colorGradeFrag = `#version 300 es
+precision mediump float;
+uniform vec3 u_grade;
+out vec4 fragColor;
+void main() {
+  fragColor = vec4(u_grade, 1.0);
 }`;
 
   // Simple crossfade fragment shader
@@ -112,6 +126,7 @@ void main() {
     this.resize();
     this.compileCrossfadeShader();
     this.compileStrobeShader();
+    this.compileColorGradeShader();
   }
 
   private setupQuad() {
@@ -293,6 +308,26 @@ void main() {
     this.strobeAlpha = 1.0;
   }
 
+  setBrightness(v: number) {
+    this.brightness = Math.max(0, Math.min(1.5, v));
+  }
+
+  getBrightness(): number {
+    return this.brightness;
+  }
+
+  setRGB(r: number, g: number, b: number) {
+    this.rgbTint = [
+      Math.max(0, Math.min(1.5, r)),
+      Math.max(0, Math.min(1.5, g)),
+      Math.max(0, Math.min(1.5, b)),
+    ];
+  }
+
+  getRGB(): [number, number, number] {
+    return [...this.rgbTint];
+  }
+
   private compileStrobeShader() {
     const gl = this.gl;
 
@@ -316,6 +351,31 @@ void main() {
     const uniforms: Record<string, WebGLUniformLocation | null> = {};
     uniforms.u_alpha = gl.getUniformLocation(program, "u_alpha");
     this.strobeShader = { program, uniforms };
+  }
+
+  private compileColorGradeShader() {
+    const gl = this.gl;
+
+    const vs = gl.createShader(gl.VERTEX_SHADER)!;
+    gl.shaderSource(vs, this.vertexSrc);
+    gl.compileShader(vs);
+
+    const fs = gl.createShader(gl.FRAGMENT_SHADER)!;
+    gl.shaderSource(fs, this.colorGradeFrag);
+    gl.compileShader(fs);
+
+    const program = gl.createProgram()!;
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.bindAttribLocation(program, 0, "a_position");
+    gl.linkProgram(program);
+
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+
+    const uniforms: Record<string, WebGLUniformLocation | null> = {};
+    uniforms.u_grade = gl.getUniformLocation(program, "u_grade");
+    this.colorGradeShader = { program, uniforms };
   }
 
   private compileCrossfadeShader() {
@@ -495,8 +555,9 @@ void main() {
     const dt = now - this.lastFrameTime;
     this.lastFrameTime = now;
 
-    // Accumulate virtual time with speed multiplier
-    this.virtualTime += dt * this.timeSpeed;
+    // Accumulate virtual time with speed multiplier, wrap at 1000s to prevent
+    // float precision loss in shaders during long events (8+ hours)
+    this.virtualTime = (this.virtualTime + dt * this.timeSpeed) % 1000.0;
 
     // FPS calc
     this.frameCount++;
@@ -575,6 +636,21 @@ void main() {
 
       // Fast decay
       this.strobeAlpha *= Math.exp(-dt * 12);
+    }
+
+    // Color grade pass (brightness + RGB tint) — multiplicative blend over framebuffer
+    const gr = this.brightness * this.rgbTint[0];
+    const gg = this.brightness * this.rgbTint[1];
+    const gb = this.brightness * this.rgbTint[2];
+    if (gr < 0.999 || gg < 0.999 || gb < 0.999) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ZERO, gl.SRC_COLOR); // result = dst * src
+      gl.useProgram(this.colorGradeShader!.program);
+      gl.uniform3f(this.colorGradeShader!.uniforms.u_grade, gr, gg, gb);
+      gl.bindVertexArray(this.vao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.bindVertexArray(null);
+      gl.disable(gl.BLEND);
     }
   }
 }
