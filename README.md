@@ -2,9 +2,8 @@
 
 Real-time audio-reactive glitch visuals generator built for live events. Custom WebGL2 shaders react to music in real time — bass, mids, highs, and beat detection drive every pixel on screen.
 
-**Built for [Earth Night Colima 2026](https://earthnight.org)** — to make the public dance, feel the music, and lose themselves in the visuals projected across 3 diamond-shaped LED panels.
+**Built for [Earth Night Colima 2026](https://www.djs4ca.com/)** — to make the public dance, feel the music, and lose themselves in the visuals projected across 3 diamond-shaped LED panels.
 
-https://github.com/user-attachments/assets/placeholder-demo.mp4
 
 ## The Stack
 
@@ -86,7 +85,7 @@ To capture system audio instead of mic input, install [VB-Cable](https://vb-audi
 
 1. In Resolume, go to **Sources > Screen Capture**
 2. Select the GlitchVJ window
-3. For the diamond LED panels: keep GlitchVJ at 1920x1080, do slicing and mapping in Resolume's Advanced Output
+3. For the LED panels: keep GlitchVJ at 1920x1080, do slicing and mapping in Resolume's Advanced Output
 
 ## Adding New Shaders
 
