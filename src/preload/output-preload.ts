@@ -1,9 +1,15 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("outputAPI", {
-  onSourceId: (callback: (sourceId: string) => void) => {
-    ipcRenderer.on("set-source-id", (_event, sourceId: string) => {
-      callback(sourceId);
+  // Receive commands from control UI
+  onCommand: (callback: (cmd: string, data: any) => void) => {
+    ipcRenderer.on("output-cmd", (_event, cmd: string, data: any) => {
+      callback(cmd, data);
     });
+  },
+
+  // Notify control UI that output is ready
+  sendReady: () => {
+    ipcRenderer.send("output-ready");
   },
 });

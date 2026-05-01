@@ -3,13 +3,15 @@
   "version": "1.0.0",
   "main": "dist/main/main.js",
   "scripts": {
-    "dev": "bun run build:main && bun run build:preload && concurrently \"bun run dev:renderer\" \"bun run dev:electron\"",
+    "dev": "bun run build:main && bun run build:preload && bun run build:renderer-js && concurrently \"bun run dev:renderer\" \"bun run dev:electron\"",
     "dev:renderer": "bun run src/dev-server.ts",
     "dev:electron": "sleep 2 && electron . --dev",
     "build": "bun run build:renderer && bun run build:main && bun run build:preload",
-    "build:renderer": "bun build src/renderer/main.ts --outdir dist/renderer --target browser && bun build src/renderer/output.ts --outdir dist/renderer --target browser && cp src/renderer/index.html dist/renderer/ && cp src/renderer/output.html dist/renderer/ && cp src/renderer/styles.css dist/renderer/ && cp -r src/renderer/shaders dist/renderer/",
+    "build:renderer-js": "bun build src/renderer/main.ts --outdir dist/renderer --target browser && bun build src/renderer/output.ts --outdir dist/renderer --target browser",
+    "build:renderer": "bun run build:renderer-js && cp src/renderer/index.html dist/renderer/ && cp src/renderer/output.html dist/renderer/ && cp src/renderer/styles.css dist/renderer/ && cp -r src/renderer/shaders dist/renderer/",
     "build:main": "bun build src/main/main.ts --outdir dist/main --target node --external electron --format cjs",
     "build:preload": "bun build src/preload/preload.ts --outdir dist/preload --target node --external electron --format cjs && bun build src/preload/output-preload.ts --outdir dist/preload --target node --external electron --format cjs",
+    "package:mac": "bun run build && electron-builder --mac",
     "package:win": "bun run build && electron-builder --win --x64"
   },
   "devDependencies": {

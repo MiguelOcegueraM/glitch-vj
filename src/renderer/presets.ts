@@ -8,9 +8,10 @@ export interface PresetDef {
   id: string;
   name: string;
   key?: string; // custom key binding (for non-numeric presets)
+  special?: string; // special clip styling (e.g., "magic")
 }
 
-const shaderFiles: PresetDef[] = [
+export const shaderFiles: PresetDef[] = [
   { id: "00_camera", name: "CAMERA GLITCH", key: "0" },
   { id: "00_camera_acid", name: "CAMERA ACID", key: "q" },
   { id: "00_camera_blur", name: "CAMERA BLUR", key: "w" },
@@ -24,6 +25,7 @@ const shaderFiles: PresetDef[] = [
   { id: "07_noise", name: "NOISE" },
   { id: "08_chromatic", name: "CHROMATIC" },
   { id: "09_strobe", name: "STROBE" },
+  { id: "10_magic", name: "MAGIC!", special: "magic" },
 ];
 
 export function getKeyMap(): Map<string, number> {

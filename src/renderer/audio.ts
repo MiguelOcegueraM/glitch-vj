@@ -11,6 +11,7 @@ export class AudioEngine {
   private ctx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
+  private stream: MediaStream | null = null;
   private freqData: Uint8Array = new Uint8Array(0);
   private timeData: Uint8Array = new Uint8Array(0);
 
@@ -36,6 +37,15 @@ export class AudioEngine {
   };
 
   async init(deviceId?: string) {
+    // Clean up previous audio resources
+    if (this.source) {
+      this.source.disconnect();
+      this.source = null;
+    }
+    if (this.stream) {
+      this.stream.getTracks().forEach((t) => t.stop());
+      this.stream = null;
+    }
     if (this.ctx) {
       this.ctx.close();
     }
@@ -55,8 +65,8 @@ export class AudioEngine {
         : true,
     };
 
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    this.source = this.ctx.createMediaStreamSource(stream);
+    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+    this.source = this.ctx.createMediaStreamSource(this.stream);
     this.source.connect(this.analyser);
   }
 

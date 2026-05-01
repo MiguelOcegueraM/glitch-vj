@@ -7,74 +7,144 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <canvas id="glcanvas"></canvas>
-  <div id="flash-message" class="hidden"></div>
+  <!-- Title bar (draggable) -->
+  <div id="titlebar">
+    <span class="titlebar-title">GLITCH<span class="accent">VJ</span></span>
+    <div class="titlebar-controls">
+      <span id="fps-display">60 FPS</span>
+    </div>
+  </div>
 
-  <!-- Text overlay input dialog -->
-  <div id="text-dialog" class="hidden">
-    <div class="text-dialog-inner">
-      <label>TEXT</label>
-      <input type="text" id="text-input" placeholder="Type here..." maxlength="100" autocomplete="off" />
-      <div class="text-dialog-row">
-        <label>COLOR</label>
-        <input type="color" id="text-color" value="#ffffff" />
-        <button id="text-submit">ADD</button>
+  <!-- Main layout -->
+  <div id="app">
+    <!-- Left: Preview + Transport -->
+    <div id="panel-left">
+      <div id="preview-section">
+        <div class="panel-header">PREVIEW</div>
+        <div id="preview-wrap">
+          <canvas id="glcanvas"></canvas>
+          <div id="preview-hints">DRAG move &middot; SCROLL resize &middot; SHIFT+SCROLL rotate</div>
+        </div>
+      </div>
+
+      <!-- Transport controls -->
+      <div id="transport">
+        <div class="panel-header">TRANSPORT</div>
+        <div class="transport-row">
+          <button id="btn-strobe" class="transport-btn strobe-btn" title="Strobe Flash (S)">STROBE</button>
+          <button id="btn-beat" class="transport-btn" title="Manual Beat (B)">BEAT</button>
+        </div>
+        <div class="transport-row">
+          <label class="transport-label">SPEED</label>
+          <button class="speed-btn" data-speed="-0.25">--</button>
+          <button class="speed-btn" data-speed="-0.1">-</button>
+          <span id="speed-display">1.0x</span>
+          <button class="speed-btn" data-speed="0.1">+</button>
+          <button class="speed-btn" data-speed="0.25">++</button>
+          <button class="speed-btn" data-speed="reset">RST</button>
+        </div>
+      </div>
+
+      <!-- Audio meters -->
+      <div id="audio-section">
+        <div class="panel-header">AUDIO</div>
+        <div class="meter-row"><span class="meter-label">BASS</span><div class="meter-bar"><div class="meter-fill bass-fill" id="meter-bass"></div></div></div>
+        <div class="meter-row"><span class="meter-label">MID</span><div class="meter-bar"><div class="meter-fill mid-fill" id="meter-mid"></div></div></div>
+        <div class="meter-row"><span class="meter-label">HIGH</span><div class="meter-bar"><div class="meter-fill high-fill" id="meter-high"></div></div></div>
+        <div id="beat-dot"></div>
+        <div class="device-row">
+          <label>INPUT</label>
+          <select id="audio-select"></select>
+        </div>
+        <div class="device-row">
+          <label>CAMERA</label>
+          <select id="video-select"></select>
+        </div>
+      </div>
+
+      <!-- MIDI -->
+      <div id="midi-section">
+        <div class="panel-header">MIDI
+          <button id="btn-midi-clear" class="small-btn" title="Clear all MIDI mappings">CLEAR</button>
+        </div>
+        <div class="device-row">
+          <label>DEVICE</label>
+          <select id="midi-select"><option value="">No MIDI</option></select>
+        </div>
+        <div id="midi-status" class="midi-status">Disconnected</div>
+        <div id="midi-learn-banner" class="hidden">
+          <span id="midi-learn-text">Press a MIDI control...</span>
+          <button id="btn-midi-learn-cancel" class="small-btn">CANCEL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: Clip grid -->
+    <div id="panel-center">
+      <div class="panel-header">CLIPS
+        <span class="hint">(right-click to MIDI learn)</span>
+      </div>
+      <div id="clip-grid"></div>
+    </div>
+
+    <!-- Right: Layers + Output -->
+    <div id="panel-right">
+      <div id="output-section">
+        <button id="btn-output" class="output-btn">OUTPUT</button>
+        <span id="output-status" class="output-off">OFF</span>
+      </div>
+
+      <div id="layers-section">
+        <div class="panel-header">LAYERS
+          <button id="btn-add-text" class="small-btn" title="Add text overlay">+ TXT</button>
+          <button id="btn-add-img" class="small-btn" title="Add image overlay">+ IMG</button>
+        </div>
+        <div id="layer-list"></div>
+      </div>
+
+      <!-- Layer properties (shown when a layer is selected) -->
+      <div id="layer-props" class="hidden">
+        <div class="panel-header">PROPERTIES</div>
+        <div class="prop-row">
+          <label>SCALE</label>
+          <input type="range" id="prop-scale" min="2" max="300" value="30" />
+          <span id="prop-scale-val">0.30</span>
+        </div>
+        <div class="prop-row">
+          <label>ROTATION</label>
+          <input type="range" id="prop-rotation" min="-180" max="180" value="0" />
+          <span id="prop-rotation-val">0&deg;</span>
+        </div>
+        <div class="prop-row">
+          <label>POS X</label>
+          <input type="range" id="prop-x" min="0" max="100" value="50" />
+          <span id="prop-x-val">0.50</span>
+        </div>
+        <div class="prop-row">
+          <label>POS Y</label>
+          <input type="range" id="prop-y" min="0" max="100" value="50" />
+          <span id="prop-y-val">0.50</span>
+        </div>
       </div>
     </div>
   </div>
 
-  <div id="hud">
-    <div class="hud-title">GlitchVJ</div>
-    <div id="output-badge" class="hidden">OUTPUT LIVE</div>
-    <div id="hud-preset">1 — GLITCH</div>
-    <div id="hud-fps">60 FPS</div>
-    <div class="hud-meters">
-      <div class="meter-row"><span class="meter-label">BASS</span><div class="meter-bar"><div class="meter-fill" id="meter-bass"></div></div></div>
-      <div class="meter-row"><span class="meter-label">MID</span><div class="meter-bar"><div class="meter-fill" id="meter-mid"></div></div></div>
-      <div class="meter-row"><span class="meter-label">HIGH</span><div class="meter-bar"><div class="meter-fill" id="meter-high"></div></div></div>
+  <!-- Hidden file input for image overlays -->
+  <input type="file" id="file-input" accept="image/*" style="display:none" />
+
+  <!-- Text overlay dialog -->
+  <div id="text-dialog" class="hidden">
+    <div class="dialog-inner">
+      <label>TEXT</label>
+      <input type="text" id="text-input" placeholder="Type here..." maxlength="100" autocomplete="off" />
+      <div class="dialog-row">
+        <label>COLOR</label>
+        <input type="color" id="text-color" value="#ffffff" />
+        <button id="text-submit" class="accent-btn">ADD</button>
+      </div>
     </div>
-    <div id="beat-indicator" class="beat-off"></div>
-    <div id="hud-layers" class="hidden"></div>
-    <div class="hud-section">
-      <label for="video-select">VIDEO INPUT</label>
-      <select id="video-select"></select>
-    </div>
-    <div class="hud-section">
-      <label for="audio-select">AUDIO INPUT</label>
-      <select id="audio-select"></select>
-    </div>
-    <div class="hud-keys">
-      <div>[0] Camera Glitch</div>
-      <div>[Q] Camera Acid</div>
-      <div>[W] Camera Blur</div>
-      <div>[E] Camera Strobe</div>
-      <div>[1-9] Presets</div>
-      <div>[Space] Random</div>
-      <div>[S] Strobe Flash</div>
-      <div>[B] Manual Beat</div>
-      <div>[H] Toggle HUD</div>
-      <div>[F] Fullscreen</div>
-      <div>[T] Always On Top</div>
-      <div>[M] Output Monitor</div>
-      <div>[+/-] Speed</div>
-      <div>[&#8593;/&#8595;] Speed x0.25</div>
-      <div>[&#8594;] Reset Speed</div>
-      <div class="hud-separator"></div>
-      <div>[O] Overlay Edit</div>
-      <div>[A] Add Text*</div>
-      <div>[R] Rotate*</div>
-      <div>[V] Toggle Vis*</div>
-      <div>[Del] Remove*</div>
-      <div>[Scroll] Resize*</div>
-      <div>[Drag] Move*</div>
-      <div>[Drop PNG] Add Img</div>
-      <div>[Shift+1-9] Layers</div>
-      <div class="hud-note">* overlay edit mode</div>
-      <div class="hud-separator"></div>
-      <div>[Esc] Exit FS/Edit</div>
-    </div>
-    <div id="strobe-warning" class="hidden">⚠ STROBE ACTIVE</div>
   </div>
+
   <script src="main.js"></script>
 </body>
 </html>

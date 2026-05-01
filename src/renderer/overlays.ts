@@ -19,6 +19,8 @@ export interface OverlayItem {
   text?: string;
   color?: string;
   fontSize?: number;
+  // Image-specific: stored for re-sending to output
+  dataUrl?: string;
   // Visibility
   visible: boolean;
 }
@@ -47,6 +49,7 @@ export class OverlayManager {
   private editMode = false;
   private textCanvas: HTMLCanvasElement;
   private textCtx: CanvasRenderingContext2D;
+  private transformBuf = new Float32Array(9); // reused each frame
 
   // Vertex shader: transforms a unit quad with a 2D transform matrix
   private vertSrc = `#version 300 es
@@ -95,13 +98,45 @@ void main() {
     return this.items.length;
   }
 
+  setEditMode(enabled: boolean) {
+    this.editMode = enabled;
+    if (!enabled) this.selectedId = null;
+  }
+
   toggleEditMode(): boolean {
-    this.editMode = !this.editMode;
-    document.body.style.cursor = this.editMode ? "default" : "none";
-    if (!this.editMode) {
-      this.selectedId = null;
+    this.setEditMode(!this.editMode);
+    // Only change cursor if we're in the output window (not control UI)
+    if (document.body.id === "output-body") {
+      document.body.style.cursor = this.editMode ? "default" : "none";
     }
     return this.editMode;
+  }
+
+  selectByIndex(index: number): boolean {
+    if (index < 0 || index >= this.items.length) return false;
+    this.selectedId = this.items[index].id;
+    return true;
+  }
+
+  getSelectedIndex(): number {
+    if (this.selectedId === null) return -1;
+    return this.items.findIndex((i) => i.id === this.selectedId);
+  }
+
+  // Update scale/rotation/position of item by index
+  setScaleByIndex(index: number, scale: number) {
+    const item = this.items[index];
+    if (item) item.scale = Math.max(0.02, Math.min(5.0, scale));
+  }
+
+  setRotationByIndex(index: number, rotation: number) {
+    const item = this.items[index];
+    if (item) item.rotation = rotation;
+  }
+
+  setPositionByIndex(index: number, x: number, y: number) {
+    const item = this.items[index];
+    if (item) { item.x = x; item.y = y; }
   }
 
   private compileShader() {
@@ -170,27 +205,35 @@ void main() {
 
   addImage(file: File): Promise<OverlayItem> {
     return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const texture = this.createGLTexture(img);
-        const item: OverlayItem = {
-          id: this.nextId++,
-          type: "image",
-          texture,
-          x: 0.5,
-          y: 0.5,
-          scale: 0.3,
-          rotation: 0,
-          srcWidth: img.width,
-          srcHeight: img.height,
-          visible: true,
+      // Read as data URL so we can store it for output sync
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const texture = this.createGLTexture(img);
+          const item: OverlayItem = {
+            id: this.nextId++,
+            type: "image",
+            texture,
+            x: 0.5,
+            y: 0.5,
+            scale: 0.3,
+            rotation: 0,
+            srcWidth: img.width,
+            srcHeight: img.height,
+            dataUrl,
+            visible: true,
+          };
+          this.items.push(item);
+          this.selectedId = item.id;
+          resolve(item);
         };
-        this.items.push(item);
-        this.selectedId = item.id;
-        resolve(item);
+        img.onerror = reject;
+        img.src = dataUrl;
       };
-      img.onerror = reject;
-      img.src = URL.createObjectURL(file);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
     });
   }
 
@@ -248,6 +291,50 @@ void main() {
     return true;
   }
 
+  removeByIndex(index: number): boolean {
+    if (index < 0 || index >= this.items.length) return false;
+    this.gl.deleteTexture(this.items[index].texture);
+    this.items.splice(index, 1);
+    if (this.selectedId !== null) {
+      const sel = this.items.find((i) => i.id === this.selectedId);
+      if (!sel) this.selectedId = null;
+    }
+    return true;
+  }
+
+  setVisibleByIndex(index: number, visible: boolean): boolean {
+    if (index < 0 || index >= this.items.length) return false;
+    this.items[index].visible = visible;
+    return true;
+  }
+
+  addImageFromDataUrl(dataUrl: string): Promise<OverlayItem> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const texture = this.createGLTexture(img);
+        const item: OverlayItem = {
+          id: this.nextId++,
+          type: "image",
+          texture,
+          x: 0.5,
+          y: 0.5,
+          scale: 0.3,
+          rotation: 0,
+          srcWidth: img.width,
+          srcHeight: img.height,
+          dataUrl,
+          visible: true,
+        };
+        this.items.push(item);
+        this.selectedId = item.id;
+        resolve(item);
+      };
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
   toggleSelectedVisibility() {
     const sel = this.selected;
     if (sel) sel.visible = !sel.visible;
@@ -260,6 +347,10 @@ void main() {
     item.visible = !item.visible;
     const name = item.type === "text" ? `"${item.text}"` : `IMG #${item.id}`;
     return { name, visible: item.visible };
+  }
+
+  getItemByIndex(index: number): OverlayItem | null {
+    return this.items[index] ?? null;
   }
 
   // Get layer info for HUD display
@@ -362,15 +453,22 @@ void main() {
       this.dragging = false;
     });
 
-    // Scroll to resize
+    // Scroll to resize, Shift+scroll to rotate
     canvas.addEventListener("wheel", (e) => {
       if (!this.editMode) return;
       const sel = this.selected;
       if (!sel) return;
 
       e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.02 : 0.02;
-      sel.scale = Math.max(0.05, Math.min(3.0, sel.scale + delta));
+      if (e.shiftKey) {
+        // Rotate: ~5 degrees per scroll tick
+        const rotDelta = e.deltaY > 0 ? -0.087 : 0.087;
+        sel.rotation += rotDelta;
+      } else {
+        // Resize
+        const delta = e.deltaY > 0 ? -0.02 : 0.02;
+        sel.scale = Math.max(0.05, Math.min(3.0, sel.scale + delta));
+      }
     }, { passive: false });
   }
 
@@ -402,23 +500,33 @@ void main() {
     }
   }
 
-  // Build a 3x3 transform matrix for the overlay quad
+  // Build a 3x3 transform matrix into reusable buffer
   private buildTransform(item: OverlayItem): Float32Array {
     const aspect = item.srcWidth / item.srcHeight;
     const canvasAspect = RENDER_WIDTH / RENDER_HEIGHT;
-
-    // Scale: map from unit quad to item size in NDC (-1 to 1)
     const sx = item.scale * aspect / canvasAspect;
     const sy = item.scale;
-
-    // Translate: map from 0-1 normalized to NDC
     const tx = item.x * 2.0 - 1.0;
-    const ty = -(item.y * 2.0 - 1.0); // flip Y
-
+    const ty = -(item.y * 2.0 - 1.0);
     const cos = Math.cos(item.rotation);
     const sin = Math.sin(item.rotation);
+    const m = this.transformBuf;
+    m[0] = sx * cos; m[1] = sx * sin; m[2] = 0;
+    m[3] = -sy * sin; m[4] = sy * cos; m[5] = 0;
+    m[6] = tx; m[7] = ty; m[8] = 1;
+    return m;
+  }
 
-    // Column-major 3x3 matrix: Scale * Rotate * Translate
+  // Build into a NEW array (for selection border which needs two transforms in one frame)
+  private buildTransformNew(item: OverlayItem): Float32Array {
+    const aspect = item.srcWidth / item.srcHeight;
+    const canvasAspect = RENDER_WIDTH / RENDER_HEIGHT;
+    const sx = item.scale * aspect / canvasAspect;
+    const sy = item.scale;
+    const tx = item.x * 2.0 - 1.0;
+    const ty = -(item.y * 2.0 - 1.0);
+    const cos = Math.cos(item.rotation);
+    const sin = Math.sin(item.rotation);
     return new Float32Array([
       sx * cos, sx * sin, 0,
       -sy * sin, sy * cos, 0,
@@ -459,7 +567,7 @@ void main() {
       if (this.editMode && item.id === this.selectedId) {
         // Re-render with slight scale increase and low opacity for border effect
         const borderItem = { ...item, scale: item.scale * 1.06 };
-        const borderTransform = this.buildTransform(borderItem);
+        const borderTransform = this.buildTransformNew(borderItem);
         gl.uniformMatrix3fv(shader.u_transform, false, borderTransform);
         gl.uniform1f(shader.u_opacity, 0.3);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

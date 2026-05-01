@@ -7,9 +7,6 @@ const isDev = process.argv.includes("--dev");
 app.commandLine.appendSwitch("enable-gpu-rasterization");
 app.commandLine.appendSwitch("enable-zero-copy");
 app.commandLine.appendSwitch("ignore-gpu-blocklist");
-// Let requestAnimationFrame cap at 60fps — unlimited wastes GPU cycles that Resolume needs
-// app.commandLine.appendSwitch("disable-frame-rate-limit");
-// app.commandLine.appendSwitch("disable-gpu-vsync");
 
 // Prevent OS sleep / screen dimming during live sets
 let powerBlockerId: number | null = null;
@@ -19,15 +16,17 @@ let outputWindow: BrowserWindow | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1920,
-    height: 1080,
+    width: 1400,
+    height: 900,
+    minWidth: 900,
+    minHeight: 600,
     frame: false,
     titleBarStyle: "hidden",
     titleBarOverlay: process.platform === "win32"
-      ? { color: "#000000", symbolColor: "#ffffff", height: 32 }
+      ? { color: "#0a0a0a", symbolColor: "#666666", height: 32 }
       : false,
     show: false,
-    backgroundColor: "#000000",
+    backgroundColor: "#0a0a0a",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -39,7 +38,6 @@ function createWindow() {
     mainWindow?.show();
   });
 
-  // Only open DevTools in dev mode
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: "detach" });
   }
@@ -53,6 +51,7 @@ function createWindow() {
   // Prevent sleep while the app is running
   powerBlockerId = powerSaveBlocker.start("prevent-display-sleep");
 
+  // ── Window controls ──
   ipcMain.on("toggle-fullscreen", () => {
     if (!mainWindow) return;
     mainWindow.setFullScreen(!mainWindow.isFullScreen());
@@ -71,7 +70,7 @@ function createWindow() {
     mainWindow.setAlwaysOnTop(!current);
   });
 
-  // Output window: open on second monitor (or same if only one)
+  // ── Output window management ──
   ipcMain.handle("toggle-output", () => {
     if (outputWindow) {
       outputWindow.close();
@@ -87,9 +86,6 @@ function createWindow() {
     const externalDisplay = displays.find((d) => d.id !== primaryDisplay.id);
     const targetDisplay = externalDisplay || primaryDisplay;
     const { x, y, width, height } = targetDisplay.bounds;
-
-    // Get the main window's media source ID for capture
-    const sourceId = mainWindow.getMediaSourceId();
 
     outputWindow = new BrowserWindow({
       x,
@@ -112,18 +108,24 @@ function createWindow() {
       outputWindow.loadFile(path.join(app.getAppPath(), "dist", "renderer", "output.html"));
     }
 
-    // Send the source ID once the output window is ready
-    outputWindow.webContents.once("did-finish-load", () => {
-      outputWindow?.webContents.send("set-source-id", sourceId);
-    });
-
     outputWindow.on("closed", () => {
       outputWindow = null;
-      // Notify main window that output closed
       mainWindow?.webContents.send("output-closed");
     });
 
     return true;
+  });
+
+  // ── Relay commands from control UI to output window ──
+  ipcMain.on("output-cmd", (_event, cmd: string, data: any) => {
+    if (outputWindow && !outputWindow.isDestroyed()) {
+      outputWindow.webContents.send("output-cmd", cmd, data);
+    }
+  });
+
+  // ── Relay from output back to control (e.g., output-ready) ──
+  ipcMain.on("output-ready", () => {
+    mainWindow?.webContents.send("output-ready");
   });
 
   mainWindow.on("closed", () => {
