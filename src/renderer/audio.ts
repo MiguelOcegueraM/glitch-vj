@@ -52,6 +52,7 @@ export class AudioEngine {
 
     this.beatTimestamp = performance.now() / 1000;
     this.ctx = new AudioContext();
+    if (this.ctx.state === "suspended") await this.ctx.resume();
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.6;
@@ -76,7 +77,13 @@ export class AudioEngine {
   }
 
   update(now: number) {
-    if (!this.analyser) return;
+    if (!this.analyser || !this.ctx) return;
+
+    // Auto-resume suspended AudioContext (Windows WASAPI/ASIO routing changes)
+    if (this.ctx.state === "suspended") {
+      this.ctx.resume();
+      return;
+    }
 
     this.analyser.getByteFrequencyData(this.freqData);
     this.analyser.getByteTimeDomainData(this.timeData);

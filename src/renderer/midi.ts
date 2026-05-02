@@ -148,7 +148,8 @@ export class MIDIEngine {
   }
 
   private handleMessage(e: MIDIMessageEvent) {
-    const [status, data1, data2] = e.data!;
+    if (!e.data || e.data.length < 3) return;
+    const [status, data1, data2] = e.data;
     const type = status & 0xf0;
     const channel = status & 0x0f;
 
@@ -200,10 +201,19 @@ export class MIDIEngine {
     }
   }
 
+  // Safe send — handles disconnected controllers without throwing
+  private safeSend(data: number[]) {
+    if (!this.output) return;
+    try {
+      this.output.send(data);
+    } catch {
+      this.output = null; // controller disconnected, stop trying
+    }
+  }
+
   // Send LED feedback to controller (Note On on channel 1)
   setLED(note: number, color: number) {
-    if (!this.output) return;
-    this.output.send([0x90, note, color]);
+    this.safeSend([0x90, note, color]);
   }
 
   // Update LEDs for active preset (if mappings use notes)
@@ -213,7 +223,7 @@ export class MIDIEngine {
       const m = this.getMappingForAction(`preset:${i}`);
       if (m && m.type === "note") {
         const color = i === activePresetIndex ? LP_COLOR.GREEN : LP_COLOR.DIM_GREEN;
-        this.output.send([0x90 | m.channel, m.number, color]);
+        this.safeSend([0x90 | m.channel, m.number, color]);
       }
     }
   }

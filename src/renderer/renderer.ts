@@ -300,6 +300,10 @@ void main() {
     return this.timeSpeed;
   }
 
+  get time(): number {
+    return this.virtualTime;
+  }
+
   setSpeed(speed: number) {
     this.timeSpeed = Math.max(0.1, Math.min(4.0, speed));
   }
@@ -552,12 +556,13 @@ void main() {
 
   render(audio: AudioData) {
     const now = performance.now() / 1000;
-    const dt = now - this.lastFrameTime;
+    const dt = Math.min(now - this.lastFrameTime, 0.1); // cap at 100ms to prevent huge jumps after sleep/resume
     this.lastFrameTime = now;
 
-    // Accumulate virtual time with speed multiplier, wrap at 1000s to prevent
-    // float precision loss in shaders during long events (8+ hours)
-    this.virtualTime = (this.virtualTime + dt * this.timeSpeed) % 1000.0;
+    // Accumulate virtual time with speed multiplier, wrap at 10000s to prevent
+    // float precision loss in shaders during long events (8+ hours).
+    // 10000 is divisible by common shader periods (2, 4, 8, 16).
+    this.virtualTime = (this.virtualTime + dt * this.timeSpeed) % 10000.0;
 
     // FPS calc
     this.frameCount++;

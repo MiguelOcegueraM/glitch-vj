@@ -120,7 +120,7 @@ async function main() {
     audioEngine.update(now);
     glRenderer.render(audioEngine.data);
     const ad = audioEngine.data;
-    overlays.render({ time: now, bass: ad.bass, mid: ad.mid, high: ad.high, beat: ad.beat, beatTime: ad.beatTime });
+    overlays.render({ time: glRenderer.time, bass: ad.bass, mid: ad.mid, high: ad.high, beat: ad.beat, beatTime: ad.beatTime });
     requestAnimationFrame(loop);
   }
 
