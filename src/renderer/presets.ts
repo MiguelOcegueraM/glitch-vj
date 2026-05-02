@@ -35,6 +35,7 @@ export const shaderFiles: PresetDef[] = [
   { id: "15_acid", name: "ACID" },
   { id: "16_shatter", name: "SHATTER" },
   { id: "17_warp", name: "WARP" },
+  { id: "18_tristrobe", name: "TRI-STROBE" },
 ];
 
 export function getKeyMap(): Map<string, number> {

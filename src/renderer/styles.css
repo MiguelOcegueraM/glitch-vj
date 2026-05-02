@@ -772,6 +772,60 @@ html, body {
   border-left: 2px solid #0f0;
 }
 
+/* ── Mapping editor ── */
+#mapping-editor-wrap {
+  padding: 4px;
+  position: relative;
+}
+
+#mapping-canvas {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  cursor: crosshair;
+  display: block;
+}
+
+#mapping-hint {
+  font-size: 9px;
+  color: #444;
+  text-align: center;
+  padding: 2px 0;
+  letter-spacing: 0.5px;
+}
+
+#mapping-info {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 8px;
+  font-size: 10px;
+  color: #666;
+}
+
+#map-selected-info {
+  color: #0f0;
+}
+
+#mapping-options {
+  padding: 4px 8px;
+}
+
+.map-checkbox {
+  font-size: 10px;
+  color: #888;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-checkbox input[type="checkbox"] {
+  accent-color: #0f0;
+  cursor: pointer;
+}
+
 /* ── Hidden utility ── */
 .hidden {
   display: none !important;

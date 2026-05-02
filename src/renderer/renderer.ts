@@ -21,6 +21,23 @@ interface RenderTarget {
   height: number;
 }
 
+export interface PanelConfig {
+  // Panel center in normalized output coords (0-1)
+  cx: number;
+  cy: number;
+  // Half-size of the square panel in aspect-corrected space
+  halfSize: number;
+  // Physical rotation of the panel in radians (e.g., PI/4 for 45°)
+  rotation: number;
+  // When true, video content stays horizontal regardless of panel rotation
+  lockHorizontal: boolean;
+  // Source region in the rendered scene (normalized 0-1)
+  srcX: number;
+  srcY: number;
+  srcW: number;
+  srcH: number;
+}
+
 // 720p saves 56% pixels vs 1080p — Resolume upscales with no visible loss on LED panels
 const RENDER_WIDTH = 1280;
 const RENDER_HEIGHT = 720;
@@ -112,6 +129,12 @@ void main() {
 
   private contextLost = false;
 
+  // Output mapping (panel remap)
+  private outputMapShader: ShaderProgram | null = null;
+  private outputMapPanels: PanelConfig[] = [];
+  private outputMapEnabled = false;
+  private sceneTarget: RenderTarget | null = null;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const gl = canvas.getContext("webgl2", {
@@ -129,6 +152,7 @@ void main() {
     this.compileCrossfadeShader();
     this.compileStrobeShader();
     this.compileColorGradeShader();
+    this.compileOutputMapShader();
 
     // Handle WebGL context loss/restore (GPU crash, power management, etc.)
     canvas.addEventListener("webglcontextlost", (e) => {
@@ -147,6 +171,7 @@ void main() {
       this.compileCrossfadeShader();
       this.compileStrobeShader();
       this.compileColorGradeShader();
+      this.compileOutputMapShader();
     });
   }
 
@@ -238,6 +263,10 @@ void main() {
     if (this.renderTargetB) this.destroyRenderTarget(this.renderTargetB);
     this.renderTargetA = this.createRenderTarget(RENDER_WIDTH, RENDER_HEIGHT);
     this.renderTargetB = this.createRenderTarget(RENDER_WIDTH, RENDER_HEIGHT);
+
+    // Recreate scene target for output mapping
+    if (this.sceneTarget) this.destroyRenderTarget(this.sceneTarget);
+    this.sceneTarget = this.createRenderTarget(RENDER_WIDTH, RENDER_HEIGHT);
   }
 
   private destroyFeedback(fb: FeedbackPass) {
@@ -432,6 +461,92 @@ void main() {
     this.crossfadeShader = { program, uniforms };
   }
 
+  // rect.xy = center, rect.z = halfSize, rect.w = lockHorizontal (1.0 = video stays upright)
+  private outputMapFrag = `#version 300 es
+precision mediump float;
+uniform sampler2D u_scene;
+uniform vec2 u_resolution;
+uniform int u_panelCount;
+uniform vec4 u_panelRects[8];
+uniform float u_panelRotations[8];
+uniform vec4 u_panelUVs[8];
+out vec4 fragColor;
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution;
+  float aspect = u_resolution.x / u_resolution.y;
+  fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+  for (int i = 0; i < 8; i++) {
+    if (i >= u_panelCount) break;
+    vec4 rect = u_panelRects[i];
+    float rot = u_panelRotations[i];
+    vec4 srcUV = u_panelUVs[i];
+    float lockH = rect.w;
+    float halfSize = rect.z;
+    // Aspect-corrected offset from panel center
+    vec2 d = (uv - rect.xy) * vec2(aspect, 1.0);
+    // Rotate into panel-local space to check bounds
+    float c = cos(-rot);
+    float s = sin(-rot);
+    vec2 local = vec2(c * d.x - s * d.y, s * d.x + c * d.y);
+    if (abs(local.x) <= halfSize && abs(local.y) <= halfSize) {
+      // lockH=1: sample with un-rotated coords (video stays horizontal)
+      // lockH=0: sample with rotated coords (video rotates with panel)
+      vec2 sampleCoord = mix(local, d, lockH);
+      vec2 panelUV = (sampleCoord / halfSize) * 0.5 + 0.5;
+      vec2 sceneUV = srcUV.xy + panelUV * srcUV.zw;
+      fragColor = texture(u_scene, sceneUV);
+      return;
+    }
+  }
+}`;
+
+  private compileOutputMapShader() {
+    const gl = this.gl;
+
+    const vs = gl.createShader(gl.VERTEX_SHADER)!;
+    gl.shaderSource(vs, this.vertexSrc);
+    gl.compileShader(vs);
+
+    const fs = gl.createShader(gl.FRAGMENT_SHADER)!;
+    gl.shaderSource(fs, this.outputMapFrag);
+    gl.compileShader(fs);
+
+    const program = gl.createProgram()!;
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.bindAttribLocation(program, 0, "a_position");
+    gl.linkProgram(program);
+
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+
+    const uniforms: Record<string, WebGLUniformLocation | null> = {};
+    for (const name of ["u_scene", "u_resolution", "u_panelCount"]) {
+      uniforms[name] = gl.getUniformLocation(program, name);
+    }
+    for (let i = 0; i < 8; i++) {
+      uniforms[`u_panelRects[${i}]`] = gl.getUniformLocation(program, `u_panelRects[${i}]`);
+      uniforms[`u_panelRotations[${i}]`] = gl.getUniformLocation(program, `u_panelRotations[${i}]`);
+      uniforms[`u_panelUVs[${i}]`] = gl.getUniformLocation(program, `u_panelUVs[${i}]`);
+    }
+
+    this.outputMapShader = { program, uniforms };
+  }
+
+  setOutputMap(panels: PanelConfig[]) {
+    this.outputMapPanels = panels.slice(0, 8);
+    this.outputMapEnabled = panels.length > 0;
+  }
+
+  clearOutputMap() {
+    this.outputMapPanels = [];
+    this.outputMapEnabled = false;
+  }
+
+  get isOutputMapped(): boolean {
+    return this.outputMapEnabled;
+  }
+
   compileShader(id: string, fragmentSrc: string) {
     if (this.programs.has(id)) return;
 
@@ -613,6 +728,9 @@ void main() {
       );
     }
 
+    // When output mapping is enabled, render everything into sceneTarget FBO first
+    const sceneFbo = this.outputMapEnabled ? this.sceneTarget!.fbo : null;
+
     const isFading = this.crossfadeProgress < 1.0 && this.prevProgram;
 
     if (isFading) {
@@ -620,8 +738,8 @@ void main() {
       this.renderShader(prog, this.currentProgramId, audio, this.renderTargetA!.fbo, this.feedback!);
       this.renderShader(this.prevProgram!, this.prevProgramId, audio, this.renderTargetB!.fbo, this.prevFeedback!);
 
-      // Composite with crossfade shader to screen
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      // Composite with crossfade shader into sceneFbo (or screen if no mapping)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo);
       gl.viewport(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
       gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -647,14 +765,15 @@ void main() {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       gl.bindVertexArray(null);
     } else {
-      // No crossfade — render directly to screen
+      // No crossfade — render into sceneFbo (or screen if no mapping)
       this.prevProgram = null;
       this.prevProgramId = "";
-      this.renderShader(prog, this.currentProgramId, audio, null, this.feedback!);
+      this.renderShader(prog, this.currentProgramId, audio, sceneFbo, this.feedback!);
     }
 
-    // Manual strobe flash (renders on top of everything)
+    // Manual strobe flash (renders on top of scene)
     if (this.strobeAlpha > 0.01) {
+      if (this.outputMapEnabled) gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -671,11 +790,12 @@ void main() {
       this.strobeAlpha *= Math.exp(-dt * 12);
     }
 
-    // Color grade pass (brightness + RGB tint) — multiplicative blend over framebuffer
+    // Color grade pass (brightness + RGB tint) — multiplicative blend over scene
     const gr = this.brightness * this.rgbTint[0];
     const gg = this.brightness * this.rgbTint[1];
     const gb = this.brightness * this.rgbTint[2];
     if (gr < 0.999 || gg < 0.999 || gb < 0.999) {
+      if (this.outputMapEnabled) gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ZERO, gl.SRC_COLOR); // result = dst * src
       gl.useProgram(this.colorGradeShader!.program);
@@ -684,6 +804,33 @@ void main() {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       gl.bindVertexArray(null);
       gl.disable(gl.BLEND);
+    }
+
+    // Output mapping: remap scene texture through panel geometry to screen
+    if (this.outputMapEnabled && this.outputMapShader && this.sceneTarget) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      const om = this.outputMapShader;
+      gl.useProgram(om.program);
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.sceneTarget.texture);
+      gl.uniform1i(om.uniforms.u_scene, 0);
+      gl.uniform2f(om.uniforms.u_resolution, RENDER_WIDTH, RENDER_HEIGHT);
+      gl.uniform1i(om.uniforms.u_panelCount, this.outputMapPanels.length);
+
+      for (let i = 0; i < this.outputMapPanels.length; i++) {
+        const p = this.outputMapPanels[i];
+        gl.uniform4f(om.uniforms[`u_panelRects[${i}]`], p.cx, p.cy, p.halfSize, p.lockHorizontal ? 1.0 : 0.0);
+        gl.uniform1f(om.uniforms[`u_panelRotations[${i}]`], p.rotation);
+        gl.uniform4f(om.uniforms[`u_panelUVs[${i}]`], p.srcX, p.srcY, p.srcW, p.srcH);
+      }
+
+      gl.bindVertexArray(this.vao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.bindVertexArray(null);
     }
   }
 }

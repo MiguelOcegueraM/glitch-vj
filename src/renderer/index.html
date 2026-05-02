@@ -121,6 +121,26 @@
         </div>
       </div>
 
+      <!-- Output mapping -->
+      <div id="mapping-section">
+        <div class="panel-header">MAPPING
+          <button id="btn-map-add" class="small-btn" title="Add diamond panel">+ ADD</button>
+          <button id="btn-map-remove" class="small-btn" title="Remove selected panel">- DEL</button>
+          <button id="btn-map-clear" class="small-btn" title="Clear all panels">CLR</button>
+        </div>
+        <div id="mapping-editor-wrap">
+          <canvas id="mapping-canvas" width="320" height="180"></canvas>
+          <div id="mapping-hint">CLICK add &middot; DRAG move &middot; SCROLL size &middot; SHIFT+SCROLL rotate</div>
+        </div>
+        <div id="mapping-options">
+          <label class="map-checkbox"><input type="checkbox" id="map-lock-horizontal" checked /> LOCK HORIZONTAL</label>
+        </div>
+        <div id="mapping-info">
+          <span id="map-panel-count">0 panels</span>
+          <span id="map-selected-info"></span>
+        </div>
+      </div>
+
       <div id="layers-section">
         <div class="panel-header">LAYERS
           <button id="btn-add-text" class="small-btn" title="Add text overlay">+ TXT</button>

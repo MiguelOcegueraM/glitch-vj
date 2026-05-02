@@ -103,6 +103,14 @@ async function main() {
           glRenderer.setRGB(data.r, data.g, data.b);
           break;
         }
+        case "set-output-map": {
+          if (data.panels && data.panels.length > 0) {
+            glRenderer.setOutputMap(data.panels);
+          } else {
+            glRenderer.clearOutputMap();
+          }
+          break;
+        }
       }
     });
 
