@@ -653,10 +653,7 @@ async function main() {
 
   // Editor panel state (in canvas pixel coords)
   interface EditorPanel {
-    cx: number;     // center x in canvas pixels
-    cy: number;     // center y in canvas pixels
-    size: number;   // half-size in canvas pixels (square panel)
-    rotation: number; // radians
+    corners: [number, number][]; // 4 corners: TL, TR, BR, BL in canvas pixels
   }
 
   let editorPanels: EditorPanel[] = [];
@@ -664,17 +661,14 @@ async function main() {
   let dragging = false;
   let dragOffsetX = 0;
   let dragOffsetY = 0;
+  let draggingCorner = -1; // which corner (0-3) is being dragged, -1 = whole panel
+  let dragCornerOffsets: [number, number][] = []; // offsets for whole-panel drag
 
   function editorToShaderPanels() {
     const cw = mapCanvas.width;
     const ch = mapCanvas.height;
-    const lockH = mapLockHorizontal.checked;
     return editorPanels.map((p, i) => ({
-      cx: p.cx / cw,
-      cy: 1.0 - p.cy / ch, // flip Y (canvas Y is top-down, GL is bottom-up)
-      halfSize: p.size / ch, // in aspect-corrected space (fraction of height)
-      rotation: p.rotation,
-      lockHorizontal: lockH,
+      corners: p.corners.map(([x, y]) => [x / cw, 1.0 - y / ch] as [number, number]),
       srcX: editorPanels.length > 1 ? i / editorPanels.length : 0,
       srcY: 0,
       srcW: editorPanels.length > 1 ? 1 / editorPanels.length : 1,
@@ -695,16 +689,10 @@ async function main() {
     drawMappingEditor();
   }
 
-  function getDiamondCorners(p: EditorPanel): [number, number][] {
-    const c = Math.cos(p.rotation);
-    const s = Math.sin(p.rotation);
-    const corners: [number, number][] = [
-      [p.size, 0], [0, p.size], [-p.size, 0], [0, -p.size],
-    ];
-    return corners.map(([x, y]) => [
-      p.cx + c * x - s * y,
-      p.cy + s * x + c * y,
-    ]);
+  function panelCenter(p: EditorPanel): [number, number] {
+    const cx = (p.corners[0][0] + p.corners[1][0] + p.corners[2][0] + p.corners[3][0]) / 4;
+    const cy = (p.corners[0][1] + p.corners[1][1] + p.corners[2][1] + p.corners[3][1]) / 4;
+    return [cx, cy];
   }
 
   function drawMappingEditor() {
@@ -724,7 +712,7 @@ async function main() {
 
     // Draw panels
     editorPanels.forEach((p, i) => {
-      const corners = getDiamondCorners(p);
+      const corners = p.corners;
       const isSelected = i === selectedPanel;
 
       // Fill
@@ -742,54 +730,66 @@ async function main() {
       mapCtx.lineWidth = isSelected ? 2 : 1;
       mapCtx.stroke();
 
-      // Panel number
+      // Panel number at center
+      const [ccx, ccy] = panelCenter(p);
       mapCtx.fillStyle = isSelected ? "#0f0" : "#0a0";
       mapCtx.font = "bold 14px Courier New";
       mapCtx.textAlign = "center";
       mapCtx.textBaseline = "middle";
-      mapCtx.fillText(`${i + 1}`, p.cx, p.cy);
+      mapCtx.fillText(`${i + 1}`, ccx, ccy);
 
       // Center dot
       mapCtx.beginPath();
-      mapCtx.arc(p.cx, p.cy, 3, 0, Math.PI * 2);
+      mapCtx.arc(ccx, ccy, 3, 0, Math.PI * 2);
       mapCtx.fillStyle = isSelected ? "#0f0" : "#0a0";
       mapCtx.fill();
 
       // Corner handles for selected panel
       if (isSelected) {
-        for (const [cx, cy] of corners) {
+        for (let ci = 0; ci < corners.length; ci++) {
+          const [cx, cy] = corners[ci];
           mapCtx.beginPath();
-          mapCtx.arc(cx, cy, 4, 0, Math.PI * 2);
-          mapCtx.fillStyle = "#0f0";
+          mapCtx.arc(cx, cy, 5, 0, Math.PI * 2);
+          mapCtx.fillStyle = "#ff0";
+          mapCtx.strokeStyle = "#0f0";
+          mapCtx.lineWidth = 1.5;
           mapCtx.fill();
+          mapCtx.stroke();
         }
       }
     });
 
     // Update info
     if (selectedPanel >= 0 && selectedPanel < editorPanels.length) {
-      const p = editorPanels[selectedPanel];
-      const deg = Math.round((p.rotation * 180) / Math.PI);
-      mapSelectedInfo.textContent = `#${selectedPanel + 1} rot:${deg}° size:${Math.round(p.size)}`;
+      mapSelectedInfo.textContent = `#${selectedPanel + 1} (drag corners to reshape)`;
     } else {
       mapSelectedInfo.textContent = "";
     }
   }
 
+  // Point-in-quad test using winding/cross-product
+  function pointInQuad(mx: number, my: number, corners: [number, number][]): boolean {
+    let pos = 0, neg = 0;
+    for (let i = 0; i < 4; i++) {
+      const [x1, y1] = corners[i];
+      const [x2, y2] = corners[(i + 1) % 4];
+      const cross = (x2 - x1) * (my - y1) - (y2 - y1) * (mx - x1);
+      if (cross > 0) pos++; else if (cross < 0) neg++;
+    }
+    return pos === 0 || neg === 0;
+  }
+
+  function hitTestCorner(mx: number, my: number, panel: EditorPanel): number {
+    for (let i = 0; i < 4; i++) {
+      const [cx, cy] = panel.corners[i];
+      if (Math.hypot(mx - cx, my - cy) < 8) return i;
+    }
+    return -1;
+  }
+
   function hitTestPanel(mx: number, my: number): number {
-    // Check from top (last drawn) to bottom
     for (let i = editorPanels.length - 1; i >= 0; i--) {
-      const p = editorPanels[i];
-      // Transform mouse into panel-local space (un-rotated)
-      const dx = mx - p.cx;
-      const dy = my - p.cy;
-      const c = Math.cos(-p.rotation);
-      const s = Math.sin(-p.rotation);
-      const lx = c * dx - s * dy;
-      const ly = s * dx + c * dy;
-      if (Math.abs(lx) <= p.size && Math.abs(ly) <= p.size) {
-        return i;
-      }
+      if (pointInQuad(mx, my, editorPanels[i].corners)) return i;
     }
     return -1;
   }
@@ -797,12 +797,18 @@ async function main() {
   function addPanel(cx?: number, cy?: number) {
     const cw = mapCanvas.width;
     const ch = mapCanvas.height;
-    editorPanels.push({
-      cx: cx ?? cw / 2,
-      cy: cy ?? ch / 2,
-      size: ch * 0.25,
-      rotation: Math.PI / 4,
-    });
+    const x = cx ?? cw / 2;
+    const y = cy ?? ch / 2;
+    const s = ch * 0.25; // half-size
+    // Default diamond shape (rotated 45°)
+    const r = Math.PI / 4;
+    const cos = Math.cos(r), sin = Math.sin(r);
+    const offsets: [number, number][] = [[-s, -s], [s, -s], [s, s], [-s, s]];
+    const corners = offsets.map(([ox, oy]) => [
+      x + cos * ox - sin * oy,
+      y + sin * ox + cos * oy,
+    ] as [number, number]);
+    editorPanels.push({ corners });
     selectedPanel = editorPanels.length - 1;
     syncOutputMap();
   }
@@ -836,12 +842,24 @@ async function main() {
 
   mapCanvas.addEventListener("mousedown", (e) => {
     const [mx, my] = getCanvasPos(e);
+    // First check if clicking a corner of the selected panel
+    if (selectedPanel >= 0 && selectedPanel < editorPanels.length) {
+      const ci = hitTestCorner(mx, my, editorPanels[selectedPanel]);
+      if (ci >= 0) {
+        dragging = true;
+        draggingCorner = ci;
+        drawMappingEditor();
+        return;
+      }
+    }
+    // Then check if clicking inside any panel
     const hit = hitTestPanel(mx, my);
     if (hit >= 0) {
       selectedPanel = hit;
       dragging = true;
-      dragOffsetX = editorPanels[hit].cx - mx;
-      dragOffsetY = editorPanels[hit].cy - my;
+      draggingCorner = -1;
+      // Store offsets from mouse to each corner for whole-panel drag
+      dragCornerOffsets = editorPanels[hit].corners.map(([cx, cy]) => [cx - mx, cy - my] as [number, number]);
     } else {
       selectedPanel = -1;
     }
@@ -849,31 +867,63 @@ async function main() {
   });
 
   mapCanvas.addEventListener("mousemove", (e) => {
-    if (!dragging || selectedPanel < 0) return;
     const [mx, my] = getCanvasPos(e);
-    editorPanels[selectedPanel].cx = mx + dragOffsetX;
-    editorPanels[selectedPanel].cy = my + dragOffsetY;
+    if (!dragging) {
+      // Update cursor based on hover
+      if (selectedPanel >= 0 && selectedPanel < editorPanels.length &&
+          hitTestCorner(mx, my, editorPanels[selectedPanel]) >= 0) {
+        mapCanvas.style.cursor = "crosshair";
+      } else if (hitTestPanel(mx, my) >= 0) {
+        mapCanvas.style.cursor = "move";
+      } else {
+        mapCanvas.style.cursor = "default";
+      }
+      return;
+    }
+    if (selectedPanel < 0) return;
+    const p = editorPanels[selectedPanel];
+    if (draggingCorner >= 0) {
+      // Drag individual corner
+      p.corners[draggingCorner] = [mx, my];
+    } else {
+      // Drag whole panel
+      for (let i = 0; i < 4; i++) {
+        p.corners[i] = [mx + dragCornerOffsets[i][0], my + dragCornerOffsets[i][1]];
+      }
+    }
     syncOutputMap();
   });
 
   window.addEventListener("mouseup", () => {
+    if (dragging) scheduleSave();
     dragging = false;
+    draggingCorner = -1;
   });
 
-  // Scroll to resize, Shift+scroll to rotate
+  // Scroll to resize (scale from center), Shift+scroll to rotate around center
   mapCanvas.addEventListener("wheel", (e) => {
     e.preventDefault();
     if (selectedPanel < 0 || selectedPanel >= editorPanels.length) return;
     const p = editorPanels[selectedPanel];
+    const [cx, cy] = panelCenter(p);
     if (e.shiftKey) {
-      // Rotate: 2° per scroll tick
-      p.rotation += (e.deltaY > 0 ? 1 : -1) * (Math.PI / 90);
+      // Rotate around center
+      const angle = (e.deltaY > 0 ? 1 : -1) * (Math.PI / 90);
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      p.corners = p.corners.map(([x, y]) => {
+        const dx = x - cx, dy = y - cy;
+        return [cx + cos * dx - sin * dy, cy + sin * dx + cos * dy] as [number, number];
+      });
     } else {
-      // Resize
-      const delta = e.deltaY > 0 ? -3 : 3;
-      p.size = Math.max(10, Math.min(mapCanvas.height * 0.8, p.size + delta));
+      // Scale from center
+      const factor = e.deltaY > 0 ? 0.95 : 1.05;
+      p.corners = p.corners.map(([x, y]) => [
+        cx + (x - cx) * factor,
+        cy + (y - cy) * factor,
+      ] as [number, number]);
     }
     syncOutputMap();
+    scheduleSave();
   });
 
   // Double-click to add a panel at click position
@@ -1163,13 +1213,26 @@ async function main() {
     try {
       if (session.mapping) {
         if (Array.isArray(session.mapping.panels) && session.mapping.panels.length > 0) {
-          // Validate panel objects have required fields
-          const valid = session.mapping.panels.every((p: any) =>
-            typeof p.cx === "number" && typeof p.cy === "number" &&
-            typeof p.size === "number" && typeof p.rotation === "number"
-          );
-          if (valid) {
-            editorPanels = session.mapping.panels;
+          const migrated: EditorPanel[] = [];
+          for (const p of session.mapping.panels) {
+            if (Array.isArray(p.corners) && p.corners.length === 4) {
+              // New format
+              migrated.push({ corners: p.corners });
+            } else if (typeof p.cx === "number" && typeof p.cy === "number" &&
+                       typeof p.size === "number" && typeof p.rotation === "number") {
+              // Old format: convert center+size+rotation to 4 corners
+              const cos = Math.cos(p.rotation), sin = Math.sin(p.rotation);
+              const s = p.size;
+              const offsets: [number, number][] = [[-s, -s], [s, -s], [s, s], [-s, s]];
+              const corners = offsets.map(([ox, oy]) => [
+                p.cx + cos * ox - sin * oy,
+                p.cy + sin * ox + cos * oy,
+              ] as [number, number]);
+              migrated.push({ corners });
+            }
+          }
+          if (migrated.length > 0) {
+            editorPanels = migrated;
             selectedPanel = 0;
           }
         }

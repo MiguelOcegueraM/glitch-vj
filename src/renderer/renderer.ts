@@ -22,20 +22,46 @@ interface RenderTarget {
 }
 
 export interface PanelConfig {
-  // Panel center in normalized output coords (0-1)
-  cx: number;
-  cy: number;
-  // Half-size of the square panel in aspect-corrected space
-  halfSize: number;
-  // Physical rotation of the panel in radians (e.g., PI/4 for 45°)
-  rotation: number;
-  // When true, video content stays horizontal regardless of panel rotation
-  lockHorizontal: boolean;
+  // 4 corners in normalized output coords (0-1), order: TL, TR, BR, BL
+  corners: [number, number][];
   // Source region in the rendered scene (normalized 0-1)
   srcX: number;
   srcY: number;
   srcW: number;
   srcH: number;
+}
+
+// Compute the 3x3 homography that maps unit square (0,0)-(1,0)-(1,1)-(0,1) to quad corners
+function computeHomography(c: [number, number][]): number[] {
+  const [x0, y0] = c[0], [x1, y1] = c[1], [x2, y2] = c[2], [x3, y3] = c[3];
+  const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3;
+  const dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
+  const denom = dx1 * dy2 - dx2 * dy1 || 1e-10;
+  const g = (dx3 * dy2 - dx2 * dy3) / denom;
+  const h = (dx1 * dy3 - dx3 * dy1) / denom;
+  const a = x1 - x0 + g * x1, b = x3 - x0 + h * x3, cc = x0;
+  const d = y1 - y0 + g * y1, e = y3 - y0 + h * y3, f = y0;
+  return [a, b, cc, d, e, f, g, h, 1];
+}
+
+// Invert a 3x3 matrix (row-major flat array)
+function invert3x3(m: number[]): number[] {
+  const [a, b, c, d, e, f, g, h, i] = m;
+  const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g) || 1e-10;
+  const inv = 1 / det;
+  return [
+    (e * i - f * h) * inv, (c * h - b * i) * inv, (b * f - c * e) * inv,
+    (f * g - d * i) * inv, (a * i - c * g) * inv, (c * d - a * f) * inv,
+    (d * h - e * g) * inv, (b * g - a * h) * inv, (a * e - b * d) * inv,
+  ];
+}
+
+// Returns inverse homography as column-major Float32Array (ready for WebGL uniformMatrix3fv)
+function panelInverseHomography(corners: [number, number][]): Float32Array {
+  const H = computeHomography(corners);
+  const Hi = invert3x3(H);
+  // Row-major → column-major for GLSL
+  return new Float32Array([Hi[0], Hi[3], Hi[6], Hi[1], Hi[4], Hi[7], Hi[2], Hi[5], Hi[8]]);
 }
 
 // 720p saves 56% pixels vs 1080p — Resolume upscales with no visible loss on LED panels
@@ -132,6 +158,7 @@ void main() {
   // Output mapping (panel remap)
   private outputMapShader: ShaderProgram | null = null;
   private outputMapPanels: PanelConfig[] = [];
+  private outputMapHInvCache: Float32Array[] = [];
   private outputMapEnabled = false;
   private sceneTarget: RenderTarget | null = null;
 
@@ -471,34 +498,25 @@ void main() {
     this.crossfadeShader = { program, uniforms };
   }
 
-  // rect.xy = center, rect.z = halfSize, rect.w = lockHorizontal (1.0 = video stays upright)
-  // panelCS.xy = precomputed (cos(-rot), sin(-rot)) per panel
+  // Quad corner-pin mapping via inverse homography per panel
   private outputMapFrag = `#version 300 es
 precision highp float;
 uniform sampler2D u_scene;
 uniform vec2 u_resolution;
 uniform int u_panelCount;
-uniform vec4 u_panelRects[8];
-uniform vec2 u_panelCS[8];
+uniform mat3 u_panelHInv[8];
 uniform vec4 u_panelUVs[8];
 out vec4 fragColor;
 void main() {
   vec2 uv = gl_FragCoord.xy / u_resolution;
-  float aspect = u_resolution.x / u_resolution.y;
   fragColor = vec4(0.0, 0.0, 0.0, 1.0);
   for (int i = 0; i < 8; i++) {
     if (i >= u_panelCount) break;
-    vec4 rect = u_panelRects[i];
-    vec2 cs = u_panelCS[i];
-    vec4 srcUV = u_panelUVs[i];
-    float lockH = rect.w;
-    float halfSize = rect.z;
-    vec2 d = (uv - rect.xy) * vec2(aspect, 1.0);
-    vec2 local = vec2(cs.x * d.x - cs.y * d.y, cs.y * d.x + cs.x * d.y);
-    if (abs(local.x) <= halfSize && abs(local.y) <= halfSize) {
-      vec2 sampleCoord = mix(local, d, lockH);
-      vec2 panelUV = (sampleCoord / halfSize) * 0.5 + 0.5;
-      vec2 sceneUV = srcUV.xy + panelUV * srcUV.zw;
+    vec3 hp = u_panelHInv[i] * vec3(uv, 1.0);
+    vec2 localUV = hp.xy / hp.z;
+    if (localUV.x >= 0.0 && localUV.x <= 1.0 && localUV.y >= 0.0 && localUV.y <= 1.0) {
+      vec4 srcUV = u_panelUVs[i];
+      vec2 sceneUV = srcUV.xy + localUV * srcUV.zw;
       fragColor = texture(u_scene, sceneUV);
       return;
     }
@@ -530,8 +548,7 @@ void main() {
       uniforms[name] = gl.getUniformLocation(program, name);
     }
     for (let i = 0; i < 8; i++) {
-      uniforms[`u_panelRects[${i}]`] = gl.getUniformLocation(program, `u_panelRects[${i}]`);
-      uniforms[`u_panelCS[${i}]`] = gl.getUniformLocation(program, `u_panelCS[${i}]`);
+      uniforms[`u_panelHInv[${i}]`] = gl.getUniformLocation(program, `u_panelHInv[${i}]`);
       uniforms[`u_panelUVs[${i}]`] = gl.getUniformLocation(program, `u_panelUVs[${i}]`);
     }
 
@@ -540,6 +557,7 @@ void main() {
 
   setOutputMap(panels: PanelConfig[]) {
     this.outputMapPanels = panels.slice(0, 8);
+    this.outputMapHInvCache = this.outputMapPanels.map(p => panelInverseHomography(p.corners));
     this.outputMapEnabled = panels.length > 0;
     // Allocate scene FBO on demand
     if (this.outputMapEnabled && !this.sceneTarget) {
@@ -837,8 +855,7 @@ void main() {
 
       for (let i = 0; i < this.outputMapPanels.length; i++) {
         const p = this.outputMapPanels[i];
-        gl.uniform4f(om.uniforms[`u_panelRects[${i}]`], p.cx, p.cy, p.halfSize, p.lockHorizontal ? 1.0 : 0.0);
-        gl.uniform2f(om.uniforms[`u_panelCS[${i}]`], Math.cos(-p.rotation), Math.sin(-p.rotation));
+        gl.uniformMatrix3fv(om.uniforms[`u_panelHInv[${i}]`], false, this.outputMapHInvCache[i]);
         gl.uniform4f(om.uniforms[`u_panelUVs[${i}]`], p.srcX, p.srcY, p.srcW, p.srcH);
       }
 
