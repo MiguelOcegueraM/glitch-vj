@@ -94,6 +94,10 @@ async function main() {
           overlays.setRotationByIndex(data.index, data.rotation);
           break;
         }
+        case "set-overlay-effect": {
+          overlays.setEffectByIndex(data.index, data.effect);
+          break;
+        }
         case "set-color-grade": {
           glRenderer.setBrightness(data.brightness);
           glRenderer.setRGB(data.r, data.g, data.b);
@@ -115,7 +119,8 @@ async function main() {
     const now = performance.now() / 1000;
     audioEngine.update(now);
     glRenderer.render(audioEngine.data);
-    overlays.render();
+    const ad = audioEngine.data;
+    overlays.render({ time: now, bass: ad.bass, mid: ad.mid, high: ad.high, beat: ad.beat, beatTime: ad.beatTime });
     requestAnimationFrame(loop);
   }
 

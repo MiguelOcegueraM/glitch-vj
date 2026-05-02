@@ -1,6 +1,12 @@
 // Overlay system: render PNG images and text on top of shader output
 // All overlays render as WebGL textured quads so Resolume captures them
 
+export const OVERLAY_EFFECTS = [
+  "none", "wobble", "glitch", "pulse", "chromatic", "pixelate", "wave", "shake", "invert",
+] as const;
+
+export type OverlayEffect = typeof OVERLAY_EFFECTS[number];
+
 export interface OverlayItem {
   id: number;
   type: "image" | "text";
@@ -23,6 +29,8 @@ export interface OverlayItem {
   dataUrl?: string;
   // Visibility
   visible: boolean;
+  // Effect
+  effect: OverlayEffect;
 }
 
 interface OverlayShader {
@@ -31,6 +39,13 @@ interface OverlayShader {
   u_transform: WebGLUniformLocation | null;
   u_resolution: WebGLUniformLocation | null;
   u_opacity: WebGLUniformLocation | null;
+  u_effect: WebGLUniformLocation | null;
+  u_time: WebGLUniformLocation | null;
+  u_bass: WebGLUniformLocation | null;
+  u_mid: WebGLUniformLocation | null;
+  u_high: WebGLUniformLocation | null;
+  u_beat: WebGLUniformLocation | null;
+  u_beatTime: WebGLUniformLocation | null;
 }
 
 const RENDER_WIDTH = 1280;
@@ -63,15 +78,112 @@ void main() {
   gl_Position = vec4(pos.xy, 0.0, 1.0);
 }`;
 
-  // Fragment shader: textured quad with alpha
+  // Fragment shader: textured quad with effects
   private fragSrc = `#version 300 es
-precision mediump float;
+precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_texture;
 uniform float u_opacity;
+uniform int u_effect;
+uniform float u_time;
+uniform float u_bass;
+uniform float u_mid;
+uniform float u_high;
+uniform float u_beat;
+uniform float u_beatTime;
 out vec4 fragColor;
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
 void main() {
-  vec4 tex = texture(u_texture, v_uv);
+  vec2 uv = v_uv;
+  float beatDecay = exp(-u_beatTime * 5.0);
+
+  // === Effect 1: WOBBLE ===
+  if (u_effect == 1) {
+    float strength = 0.03 + u_bass * 0.04;
+    uv.x += sin(uv.y * 12.0 + u_time * 4.0) * strength;
+    uv.y += cos(uv.x * 10.0 + u_time * 3.0) * strength * 0.7;
+  }
+
+  // === Effect 2: GLITCH ===
+  else if (u_effect == 2) {
+    float intensity = 0.3 + u_bass * 0.7;
+    float blockY = floor(uv.y * 15.0);
+    float blockHash = hash(vec2(blockY, floor(u_time * 6.0)));
+    if (blockHash > (1.0 - intensity * 0.4)) {
+      uv.x += (hash(vec2(blockY, floor(u_time * 8.0) + 1.0)) - 0.5) * 0.15 * intensity;
+    }
+    // RGB split
+    float shift = intensity * 0.015 + beatDecay * 0.03;
+    vec4 texR = texture(u_texture, uv + vec2(shift, 0.0));
+    vec4 texG = texture(u_texture, uv);
+    vec4 texB = texture(u_texture, uv - vec2(shift, 0.0));
+    float a = max(max(texR.a, texG.a), texB.a);
+    // Random invert on beat
+    vec3 col = vec3(texR.r, texG.g, texB.b);
+    if (u_beat > 0.5 && hash(vec2(blockY, floor(u_time * 20.0))) > 0.6) {
+      col = vec3(1.0) - col;
+    }
+    fragColor = vec4(col, a * u_opacity);
+    return;
+  }
+
+  // === Effect 3: PULSE ===
+  else if (u_effect == 3) {
+    // Scale from center based on bass
+    float pulse = 1.0 + u_bass * 0.12 + beatDecay * 0.08;
+    uv = (uv - 0.5) * (1.0 / pulse) + 0.5;
+  }
+
+  // === Effect 4: CHROMATIC ===
+  else if (u_effect == 4) {
+    float shift = 0.008 + u_bass * 0.015 + beatDecay * 0.02;
+    float angle = u_time * 0.5;
+    vec2 dir = vec2(cos(angle), sin(angle)) * shift;
+    vec4 texR = texture(u_texture, uv + dir);
+    vec4 texG = texture(u_texture, uv);
+    vec4 texB = texture(u_texture, uv - dir);
+    float a = max(max(texR.a, texG.a), texB.a);
+    fragColor = vec4(texR.r, texG.g, texB.b, a * u_opacity);
+    return;
+  }
+
+  // === Effect 5: PIXELATE ===
+  else if (u_effect == 5) {
+    float pixels = mix(80.0, 8.0, u_bass);
+    uv = floor(uv * pixels) / pixels;
+  }
+
+  // === Effect 6: WAVE ===
+  else if (u_effect == 6) {
+    float amp = 0.04 + u_mid * 0.06;
+    uv.x += sin(uv.y * 20.0 + u_time * 5.0) * amp;
+    uv.y += sin(uv.x * 15.0 + u_time * 3.0) * amp * 0.3;
+  }
+
+  // === Effect 7: SHAKE ===
+  else if (u_effect == 7) {
+    float shakeAmt = u_bass * 0.04 + beatDecay * 0.06;
+    float sx = hash(vec2(floor(u_time * 30.0), 0.0)) - 0.5;
+    float sy = hash(vec2(0.0, floor(u_time * 30.0))) - 0.5;
+    uv += vec2(sx, sy) * shakeAmt;
+  }
+
+  // === Effect 8: INVERT ===
+  // (handled after sampling below)
+
+  vec4 tex = texture(u_texture, uv);
+
+  if (u_effect == 8) {
+    tex.rgb = vec3(1.0) - tex.rgb;
+    // Pulse inversion intensity with beat
+    float inv = 0.7 + beatDecay * 0.3;
+    tex.rgb = mix(texture(u_texture, uv).rgb, tex.rgb, inv);
+  }
+
   fragColor = vec4(tex.rgb, tex.a * u_opacity);
 }`;
 
@@ -139,6 +251,11 @@ void main() {
     if (item) { item.x = x; item.y = y; }
   }
 
+  setEffectByIndex(index: number, effect: OverlayEffect) {
+    const item = this.items[index];
+    if (item) item.effect = effect;
+  }
+
   private compileShader() {
     const gl = this.gl;
 
@@ -173,6 +290,13 @@ void main() {
       u_transform: gl.getUniformLocation(program, "u_transform"),
       u_resolution: gl.getUniformLocation(program, "u_resolution"),
       u_opacity: gl.getUniformLocation(program, "u_opacity"),
+      u_effect: gl.getUniformLocation(program, "u_effect"),
+      u_time: gl.getUniformLocation(program, "u_time"),
+      u_bass: gl.getUniformLocation(program, "u_bass"),
+      u_mid: gl.getUniformLocation(program, "u_mid"),
+      u_high: gl.getUniformLocation(program, "u_high"),
+      u_beat: gl.getUniformLocation(program, "u_beat"),
+      u_beatTime: gl.getUniformLocation(program, "u_beatTime"),
     };
   }
 
@@ -224,6 +348,7 @@ void main() {
             srcHeight: img.height,
             dataUrl,
             visible: true,
+            effect: "none",
           };
           this.items.push(item);
           this.selectedId = item.id;
@@ -274,6 +399,7 @@ void main() {
       color,
       fontSize,
       visible: true,
+      effect: "none",
     };
     this.items.push(item);
     this.selectedId = item.id;
@@ -325,6 +451,7 @@ void main() {
           srcHeight: img.height,
           dataUrl,
           visible: true,
+          effect: "none",
         };
         this.items.push(item);
         this.selectedId = item.id;
@@ -534,7 +661,7 @@ void main() {
     ]);
   }
 
-  render() {
+  render(audio?: { time: number; bass: number; mid: number; high: number; beat: number; beatTime: number }) {
     if (this.items.length === 0) return;
 
     const gl = this.gl;
@@ -548,14 +675,25 @@ void main() {
     gl.useProgram(shader.program);
     gl.bindVertexArray(this.quadVao);
 
+    // Set audio uniforms once per frame
+    const t = audio?.time ?? 0;
+    gl.uniform1f(shader.u_time, t);
+    gl.uniform1f(shader.u_bass, audio?.bass ?? 0);
+    gl.uniform1f(shader.u_mid, audio?.mid ?? 0);
+    gl.uniform1f(shader.u_high, audio?.high ?? 0);
+    gl.uniform1f(shader.u_beat, audio?.beat ?? 0);
+    gl.uniform1f(shader.u_beatTime, audio?.beatTime ?? 999);
+
     for (const item of this.items) {
       if (!item.visible) continue;
 
       const transform = this.buildTransform(item);
+      const effectIdx = OVERLAY_EFFECTS.indexOf(item.effect);
 
       gl.uniformMatrix3fv(shader.u_transform, false, transform);
       gl.uniform1f(shader.u_opacity, 1.0);
       gl.uniform2f(shader.u_resolution, RENDER_WIDTH, RENDER_HEIGHT);
+      gl.uniform1i(shader.u_effect, effectIdx);
 
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, item.texture);
@@ -570,6 +708,7 @@ void main() {
         const borderTransform = this.buildTransformNew(borderItem);
         gl.uniformMatrix3fv(shader.u_transform, false, borderTransform);
         gl.uniform1f(shader.u_opacity, 0.3);
+        gl.uniform1i(shader.u_effect, 0); // no effect on border
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       }
     }

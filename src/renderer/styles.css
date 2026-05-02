@@ -749,6 +749,23 @@ html, body {
 .slider-g::-webkit-slider-thumb { background: #4f4 !important; }
 .slider-b::-webkit-slider-thumb { background: #44f !important; }
 
+.prop-select {
+  flex: 1;
+  background: #111;
+  color: #0f0;
+  border: 1px solid #2a2a2a;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 4px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+
+.prop-select:focus {
+  border-color: #0f0;
+  outline: none;
+}
+
 /* Layer row selected state */
 .layer-row.selected {
   background: #1a1a0a;

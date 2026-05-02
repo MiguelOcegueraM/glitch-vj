@@ -306,6 +306,7 @@ async function main() {
         index: idx, x: item.x, y: item.y, scale: item.scale, rotation: item.rotation,
       });
       sendOutput("set-overlay-visible", { index: idx, visible: item.visible });
+      sendOutput("set-overlay-effect", { index: idx, effect: item.effect ?? "none" });
     });
   }
 
@@ -363,6 +364,7 @@ async function main() {
     }
 
     propsEl.classList.remove("hidden");
+    (document.getElementById("prop-effect") as HTMLSelectElement).value = item.effect ?? "none";
     (document.getElementById("prop-scale") as HTMLInputElement).value = String(Math.round(item.scale * 100));
     document.getElementById("prop-scale-val")!.textContent = item.scale.toFixed(2);
 
@@ -408,6 +410,14 @@ async function main() {
     e.preventDefault();
     const index = parseInt(row.dataset.index!);
     startMIDILearn(`layer:${index}`, row);
+  });
+
+  // Layer effect dropdown
+  document.getElementById("prop-effect")!.addEventListener("change", (e) => {
+    if (selectedLayerIndex < 0) return;
+    const effect = (e.target as HTMLSelectElement).value;
+    overlays.setEffectByIndex(selectedLayerIndex, effect as any);
+    sendOutput("set-overlay-effect", { index: selectedLayerIndex, effect });
   });
 
   // Layer property sliders
@@ -777,7 +787,8 @@ async function main() {
     const now = performance.now() / 1000;
     audioEngine.update(now);
     glRenderer.render(audioEngine.data);
-    overlays.render();
+    const ad = audioEngine.data;
+    overlays.render({ time: now, bass: ad.bass, mid: ad.mid, high: ad.high, beat: ad.beat, beatTime: ad.beatTime });
 
     // Sync overlay transforms to output every frame (only sends when changed)
     if (outputActive) syncAllOverlayTransforms();

@@ -131,6 +131,20 @@
       <div id="layer-props" class="hidden">
         <div class="panel-header">PROPERTIES</div>
         <div class="prop-row">
+          <label>FX</label>
+          <select id="prop-effect" class="prop-select">
+            <option value="none">NONE</option>
+            <option value="wobble">WOBBLE</option>
+            <option value="glitch">GLITCH</option>
+            <option value="pulse">PULSE</option>
+            <option value="chromatic">CHROMATIC</option>
+            <option value="pixelate">PIXELATE</option>
+            <option value="wave">WAVE</option>
+            <option value="shake">SHAKE</option>
+            <option value="invert">INVERT</option>
+          </select>
+        </div>
+        <div class="prop-row">
           <label>SCALE</label>
           <input type="range" id="prop-scale" min="2" max="300" value="30" />
           <span id="prop-scale-val">0.30</span>
