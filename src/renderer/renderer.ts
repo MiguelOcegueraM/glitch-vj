@@ -166,6 +166,12 @@ void main() {
       this.programs.clear();
       this.currentProgram = null;
       this.prevProgram = null;
+      // Null all GL resources — their handles are invalid after context loss
+      this.feedback = null;
+      this.prevFeedback = null;
+      this.renderTargetA = null;
+      this.renderTargetB = null;
+      this.sceneTarget = null;
       this.setupQuad();
       this.resize();
       this.compileCrossfadeShader();
@@ -264,9 +270,13 @@ void main() {
     this.renderTargetA = this.createRenderTarget(RENDER_WIDTH, RENDER_HEIGHT);
     this.renderTargetB = this.createRenderTarget(RENDER_WIDTH, RENDER_HEIGHT);
 
-    // Recreate scene target for output mapping
+    // Recreate scene target only when output mapping is active
     if (this.sceneTarget) this.destroyRenderTarget(this.sceneTarget);
-    this.sceneTarget = this.createRenderTarget(RENDER_WIDTH, RENDER_HEIGHT);
+    if (this.outputMapEnabled) {
+      this.sceneTarget = this.createRenderTarget(RENDER_WIDTH, RENDER_HEIGHT);
+    } else {
+      this.sceneTarget = null;
+    }
   }
 
   private destroyFeedback(fb: FeedbackPass) {
@@ -462,13 +472,14 @@ void main() {
   }
 
   // rect.xy = center, rect.z = halfSize, rect.w = lockHorizontal (1.0 = video stays upright)
+  // panelCS.xy = precomputed (cos(-rot), sin(-rot)) per panel
   private outputMapFrag = `#version 300 es
-precision mediump float;
+precision highp float;
 uniform sampler2D u_scene;
 uniform vec2 u_resolution;
 uniform int u_panelCount;
 uniform vec4 u_panelRects[8];
-uniform float u_panelRotations[8];
+uniform vec2 u_panelCS[8];
 uniform vec4 u_panelUVs[8];
 out vec4 fragColor;
 void main() {
@@ -478,19 +489,13 @@ void main() {
   for (int i = 0; i < 8; i++) {
     if (i >= u_panelCount) break;
     vec4 rect = u_panelRects[i];
-    float rot = u_panelRotations[i];
+    vec2 cs = u_panelCS[i];
     vec4 srcUV = u_panelUVs[i];
     float lockH = rect.w;
     float halfSize = rect.z;
-    // Aspect-corrected offset from panel center
     vec2 d = (uv - rect.xy) * vec2(aspect, 1.0);
-    // Rotate into panel-local space to check bounds
-    float c = cos(-rot);
-    float s = sin(-rot);
-    vec2 local = vec2(c * d.x - s * d.y, s * d.x + c * d.y);
+    vec2 local = vec2(cs.x * d.x - cs.y * d.y, cs.y * d.x + cs.x * d.y);
     if (abs(local.x) <= halfSize && abs(local.y) <= halfSize) {
-      // lockH=1: sample with un-rotated coords (video stays horizontal)
-      // lockH=0: sample with rotated coords (video rotates with panel)
       vec2 sampleCoord = mix(local, d, lockH);
       vec2 panelUV = (sampleCoord / halfSize) * 0.5 + 0.5;
       vec2 sceneUV = srcUV.xy + panelUV * srcUV.zw;
@@ -526,7 +531,7 @@ void main() {
     }
     for (let i = 0; i < 8; i++) {
       uniforms[`u_panelRects[${i}]`] = gl.getUniformLocation(program, `u_panelRects[${i}]`);
-      uniforms[`u_panelRotations[${i}]`] = gl.getUniformLocation(program, `u_panelRotations[${i}]`);
+      uniforms[`u_panelCS[${i}]`] = gl.getUniformLocation(program, `u_panelCS[${i}]`);
       uniforms[`u_panelUVs[${i}]`] = gl.getUniformLocation(program, `u_panelUVs[${i}]`);
     }
 
@@ -536,11 +541,20 @@ void main() {
   setOutputMap(panels: PanelConfig[]) {
     this.outputMapPanels = panels.slice(0, 8);
     this.outputMapEnabled = panels.length > 0;
+    // Allocate scene FBO on demand
+    if (this.outputMapEnabled && !this.sceneTarget) {
+      this.sceneTarget = this.createRenderTarget(RENDER_WIDTH, RENDER_HEIGHT);
+    }
   }
 
   clearOutputMap() {
     this.outputMapPanels = [];
     this.outputMapEnabled = false;
+    // Free scene FBO when mapping is off
+    if (this.sceneTarget) {
+      this.destroyRenderTarget(this.sceneTarget);
+      this.sceneTarget = null;
+    }
   }
 
   get isOutputMapped(): boolean {
@@ -773,7 +787,7 @@ void main() {
 
     // Manual strobe flash (renders on top of scene)
     if (this.strobeAlpha > 0.01) {
-      if (this.outputMapEnabled) gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo); // always explicit: null=screen, fbo=scene
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -795,7 +809,7 @@ void main() {
     const gg = this.brightness * this.rgbTint[1];
     const gb = this.brightness * this.rgbTint[2];
     if (gr < 0.999 || gg < 0.999 || gb < 0.999) {
-      if (this.outputMapEnabled) gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo); // always explicit
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ZERO, gl.SRC_COLOR); // result = dst * src
       gl.useProgram(this.colorGradeShader!.program);
@@ -824,7 +838,7 @@ void main() {
       for (let i = 0; i < this.outputMapPanels.length; i++) {
         const p = this.outputMapPanels[i];
         gl.uniform4f(om.uniforms[`u_panelRects[${i}]`], p.cx, p.cy, p.halfSize, p.lockHorizontal ? 1.0 : 0.0);
-        gl.uniform1f(om.uniforms[`u_panelRotations[${i}]`], p.rotation);
+        gl.uniform2f(om.uniforms[`u_panelCS[${i}]`], Math.cos(-p.rotation), Math.sin(-p.rotation));
         gl.uniform4f(om.uniforms[`u_panelUVs[${i}]`], p.srcX, p.srcY, p.srcW, p.srcH);
       }
 

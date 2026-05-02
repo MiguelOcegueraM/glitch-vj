@@ -808,13 +808,14 @@ async function main() {
   }
 
   // Button handlers
-  document.getElementById("btn-map-add")!.addEventListener("click", () => addPanel());
+  document.getElementById("btn-map-add")!.addEventListener("click", () => { addPanel(); scheduleSave(); });
 
   document.getElementById("btn-map-remove")!.addEventListener("click", () => {
     if (selectedPanel >= 0 && selectedPanel < editorPanels.length) {
       editorPanels.splice(selectedPanel, 1);
       selectedPanel = Math.min(selectedPanel, editorPanels.length - 1);
       syncOutputMap();
+      scheduleSave();
     }
   });
 
@@ -822,6 +823,7 @@ async function main() {
     editorPanels = [];
     selectedPanel = -1;
     syncOutputMap();
+    scheduleSave();
   });
 
   // Canvas mouse interaction
@@ -1049,6 +1051,186 @@ async function main() {
 
   // ── Resize ──
   window.addEventListener("resize", () => glRenderer.resize());
+
+  // ── Session persistence (localStorage) ──
+  const STORAGE_KEY = "glitchvj-session";
+
+  function saveSession() {
+    try {
+      const session = {
+        presetIndex: currentPresetIndex,
+        speed: glRenderer.speed,
+        colorGrade: {
+          brightness: (document.getElementById("ctrl-brightness") as HTMLInputElement).value,
+          r: (document.getElementById("ctrl-r") as HTMLInputElement).value,
+          g: (document.getElementById("ctrl-g") as HTMLInputElement).value,
+          b: (document.getElementById("ctrl-b") as HTMLInputElement).value,
+        },
+        mapping: {
+          panels: editorPanels,
+          lockHorizontal: mapLockHorizontal.checked,
+        },
+        overlays: (() => {
+          const items: any[] = [];
+          const layers = overlays.getLayerInfo();
+          for (let i = 0; i < layers.length; i++) {
+            const item = overlays.getItemByIndex(i);
+            if (!item) continue;
+            items.push({
+              type: item.type,
+              text: item.text,
+              color: item.color,
+              fontSize: item.fontSize,
+              dataUrl: item.dataUrl,
+              x: item.x,
+              y: item.y,
+              scale: item.scale,
+              rotation: item.rotation,
+              visible: item.visible,
+              effect: item.effect,
+            });
+          }
+          return items;
+        })(),
+      };
+      const json = JSON.stringify(session);
+      if (json.length > 4 * 1024 * 1024) {
+        // Too large (likely big image overlays) — save without image data
+        for (const ov of session.overlays) {
+          if (ov.type === "image") ov.dataUrl = undefined;
+        }
+        const trimmed = JSON.stringify(session);
+        localStorage.setItem(STORAGE_KEY, trimmed);
+        console.warn(`Session too large (${Math.round(json.length / 1024)}KB) — saved without images`);
+      } else {
+        localStorage.setItem(STORAGE_KEY, json);
+      }
+    } catch (e) {
+      // localStorage full or unavailable — silent
+    }
+  }
+
+  async function restoreSession() {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(STORAGE_KEY);
+    } catch (e) {
+      return;
+    }
+    if (!raw) return;
+
+    let session: any;
+    try {
+      session = JSON.parse(raw);
+    } catch (e) {
+      console.warn("Corrupt session data — clearing");
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+
+    // Preset
+    try {
+      if (typeof session.presetIndex === "number" && session.presetIndex < presets.length) {
+        setPreset(session.presetIndex);
+      }
+    } catch (e) { console.warn("Restore preset failed:", e); }
+
+    // Speed
+    try {
+      if (typeof session.speed === "number") {
+        glRenderer.setSpeed(session.speed);
+        speedDisplay.textContent = `${glRenderer.speed.toFixed(1)}x`;
+      }
+    } catch (e) { console.warn("Restore speed failed:", e); }
+
+    // Color grade
+    try {
+      if (session.colorGrade) {
+        const cg = session.colorGrade;
+        for (const [id, val] of Object.entries(cg) as [string, string][]) {
+          const el = document.getElementById(`ctrl-${id === "brightness" ? "brightness" : id}`) as HTMLInputElement | null;
+          if (el) {
+            el.value = val;
+            const label = document.getElementById(`ctrl-${id === "brightness" ? "brightness" : id}-val`);
+            if (label) label.textContent = `${val}%`;
+          }
+        }
+        syncColorGrade();
+      }
+    } catch (e) { console.warn("Restore color grade failed:", e); }
+
+    // Mapping panels
+    try {
+      if (session.mapping) {
+        if (Array.isArray(session.mapping.panels) && session.mapping.panels.length > 0) {
+          // Validate panel objects have required fields
+          const valid = session.mapping.panels.every((p: any) =>
+            typeof p.cx === "number" && typeof p.cy === "number" &&
+            typeof p.size === "number" && typeof p.rotation === "number"
+          );
+          if (valid) {
+            editorPanels = session.mapping.panels;
+            selectedPanel = 0;
+          }
+        }
+        if (typeof session.mapping.lockHorizontal === "boolean") {
+          mapLockHorizontal.checked = session.mapping.lockHorizontal;
+        }
+        syncOutputMap();
+      }
+    } catch (e) { console.warn("Restore mapping failed:", e); }
+
+    // Overlays (each wrapped individually so one bad overlay doesn't kill the rest)
+    if (Array.isArray(session.overlays)) {
+      for (const ov of session.overlays) {
+        try {
+          let item;
+          if (ov.type === "text" && ov.text) {
+            item = overlays.addText(ov.text, ov.color, ov.fontSize);
+          } else if (ov.type === "image" && ov.dataUrl) {
+            item = await overlays.addImageFromDataUrl(ov.dataUrl);
+          }
+          if (item) {
+            item.x = ov.x ?? 0.5;
+            item.y = ov.y ?? 0.5;
+            item.scale = ov.scale ?? 0.3;
+            item.rotation = ov.rotation ?? 0;
+            item.visible = ov.visible ?? true;
+            item.effect = ov.effect ?? "none";
+          }
+        } catch (e) {
+          console.warn("Restore overlay failed, skipping:", e);
+        }
+      }
+      try { updateLayerList(); } catch (e) {}
+    }
+
+    console.log("Session restored");
+  }
+
+  // Auto-save: debounced to avoid spam
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveSession, 500);
+  }
+
+  // Hook save triggers (explicit — no MutationObserver to avoid GC pressure under MIDI)
+  document.getElementById("ctrl-brightness")!.addEventListener("input", scheduleSave);
+  for (const ch of ["r", "g", "b"]) {
+    document.getElementById(`ctrl-${ch}`)!.addEventListener("input", scheduleSave);
+  }
+  mapLockHorizontal.addEventListener("change", scheduleSave);
+  mapCanvas.addEventListener("mouseup", scheduleSave);
+  clipGrid.addEventListener("click", scheduleSave);
+  for (const btn of document.querySelectorAll(".speed-btn")) {
+    btn.addEventListener("click", scheduleSave);
+  }
+  document.getElementById("prop-effect")!.addEventListener("change", scheduleSave);
+  canvas.addEventListener("mouseup", scheduleSave);
+
+  // Restore session on startup (non-blocking — render loop starts regardless)
+  restoreSession().catch((e) => console.warn("Session restore error:", e));
 
   // ── Render loop ──
   const fpsEl = document.getElementById("fps-display")!;
