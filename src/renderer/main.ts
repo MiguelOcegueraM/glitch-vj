@@ -119,7 +119,27 @@ async function main() {
   await populateDevices();
 
   // Re-populate on device change (e.g., plugging in a new mic/camera)
-  navigator.mediaDevices.addEventListener("devicechange", () => populateDevices());
+  navigator.mediaDevices.addEventListener("devicechange", () => refreshDevices());
+
+  // Refresh devices and reconnect webcam if needed
+  async function refreshDevices() {
+    await populateDevices();
+    // If a camera shader is active, restart the webcam with the current selection
+    if (glRenderer.needsWebcam) {
+      const deviceId = getSelectedVideoDeviceId();
+      if (deviceId) {
+        glRenderer.startWebcam(deviceId).catch(() => {});
+        sendOutput("set-preset", {
+          presetId: presets[currentPresetIndex].id,
+          videoDeviceId: deviceId,
+        });
+      }
+    }
+  }
+
+  document.getElementById("btn-refresh-devices")!.addEventListener("click", () => {
+    refreshDevices();
+  });
 
   // Audio device change
   document.getElementById("audio-select")!.addEventListener("change", async (e) => {

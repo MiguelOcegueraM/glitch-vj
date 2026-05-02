@@ -251,8 +251,9 @@ void main() {
   private currentVideoDeviceId: string | undefined;
 
   async startWebcam(deviceId?: string) {
-    // If already active with the same device, skip
-    if (this.webcamActive && deviceId === this.currentVideoDeviceId) return;
+    // If already active with the same device AND stream is still alive, skip
+    const streamAlive = this.videoStream?.getVideoTracks().some((t) => t.readyState === "live");
+    if (this.webcamActive && deviceId === this.currentVideoDeviceId && streamAlive) return;
 
     // If switching device, stop first
     if (this.webcamActive) this.stopWebcam();
