@@ -79,9 +79,22 @@ export class AudioEngine {
   update(now: number) {
     if (!this.analyser || !this.ctx) return;
 
-    // Auto-resume suspended AudioContext (Windows WASAPI/ASIO routing changes)
+    // Auto-resume suspended AudioContext (macOS/Windows audio routing changes)
     if (this.ctx.state === "suspended") {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
+      // Don't return — still update beat time so meters decay gracefully
+      this.data.beatTime = now - this.beatTimestamp;
+      return;
+    }
+
+    // AudioContext closed unexpectedly — zero everything out
+    if (this.ctx.state === "closed") {
+      this.data.bass = 0;
+      this.data.mid = 0;
+      this.data.high = 0;
+      this.data.volume = 0;
+      this.data.beat = 0;
+      this.data.beatTime = now - this.beatTimestamp;
       return;
     }
 

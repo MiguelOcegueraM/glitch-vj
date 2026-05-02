@@ -110,6 +110,8 @@ void main() {
   fragColor = mix(b, a, u_mix);
 }`;
 
+  private contextLost = false;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const gl = canvas.getContext("webgl2", {
@@ -127,6 +129,25 @@ void main() {
     this.compileCrossfadeShader();
     this.compileStrobeShader();
     this.compileColorGradeShader();
+
+    // Handle WebGL context loss/restore (GPU crash, power management, etc.)
+    canvas.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault();
+      this.contextLost = true;
+      console.warn("WebGL context lost — waiting for restore");
+    });
+    canvas.addEventListener("webglcontextrestored", () => {
+      console.warn("WebGL context restored — reinitializing");
+      this.contextLost = false;
+      this.programs.clear();
+      this.currentProgram = null;
+      this.prevProgram = null;
+      this.setupQuad();
+      this.resize();
+      this.compileCrossfadeShader();
+      this.compileStrobeShader();
+      this.compileColorGradeShader();
+    });
   }
 
   private setupQuad() {
@@ -517,8 +538,8 @@ void main() {
     gl.uniform1f(u.u_beat, audio.beat);
     gl.uniform1f(u.u_beatTime, audio.beatTime);
 
-    // Bind webcam texture
-    if (this.webcamActive && this.videoEl && this.videoTexture) {
+    // Bind webcam texture (only when video has data ready)
+    if (this.webcamActive && this.videoEl && this.videoTexture && this.videoEl.readyState >= 2) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.videoEl);
@@ -554,7 +575,13 @@ void main() {
     }
   }
 
+  get isContextLost(): boolean {
+    return this.contextLost;
+  }
+
   render(audio: AudioData) {
+    if (this.contextLost) return;
+
     const now = performance.now() / 1000;
     const dt = Math.min(now - this.lastFrameTime, 0.1); // cap at 100ms to prevent huge jumps after sleep/resume
     this.lastFrameTime = now;

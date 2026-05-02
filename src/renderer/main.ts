@@ -782,23 +782,34 @@ async function main() {
   // ── Render loop ──
   const fpsEl = document.getElementById("fps-display")!;
   const beatDot = document.getElementById("beat-dot")!;
+  const meterBass = document.getElementById("meter-bass") as HTMLElement;
+  const meterMid = document.getElementById("meter-mid") as HTMLElement;
+  const meterHigh = document.getElementById("meter-high") as HTMLElement;
 
   function loop() {
-    const now = performance.now() / 1000;
-    audioEngine.update(now);
-    glRenderer.render(audioEngine.data);
-    const ad = audioEngine.data;
-    overlays.render({ time: glRenderer.time, bass: ad.bass, mid: ad.mid, high: ad.high, beat: ad.beat, beatTime: ad.beatTime });
+    try {
+      const now = performance.now() / 1000;
+      audioEngine.update(now);
 
-    // Sync overlay transforms to output every frame (only sends when changed)
-    if (outputActive) syncAllOverlayTransforms();
+      // Always update audio meters even if WebGL rendering fails
+      const data = audioEngine.data;
+      meterBass.style.width = `${data.bass * 100}%`;
+      meterMid.style.width = `${data.mid * 100}%`;
+      meterHigh.style.width = `${data.high * 100}%`;
+      beatDot.className = data.beat > 0.5 ? "on" : "";
 
-    const data = audioEngine.data;
-    (document.getElementById("meter-bass") as HTMLElement).style.width = `${data.bass * 100}%`;
-    (document.getElementById("meter-mid") as HTMLElement).style.width = `${data.mid * 100}%`;
-    (document.getElementById("meter-high") as HTMLElement).style.width = `${data.high * 100}%`;
-    beatDot.className = data.beat > 0.5 ? "on" : "";
-    fpsEl.textContent = `${glRenderer.fps} FPS`;
+      if (!glRenderer.isContextLost) {
+        glRenderer.render(data);
+        overlays.render({ time: glRenderer.time, bass: data.bass, mid: data.mid, high: data.high, beat: data.beat, beatTime: data.beatTime });
+      }
+
+      // Sync overlay transforms to output every frame (only sends when changed)
+      if (outputActive) syncAllOverlayTransforms();
+
+      fpsEl.textContent = `${glRenderer.fps} FPS`;
+    } catch (e) {
+      console.error("Render loop error:", e);
+    }
 
     requestAnimationFrame(loop);
   }

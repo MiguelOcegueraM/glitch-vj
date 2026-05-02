@@ -114,13 +114,19 @@ async function main() {
     glRenderer.resize();
   });
 
-  // Render loop
+  // Render loop (protected — never let a single error kill the loop)
   function loop() {
-    const now = performance.now() / 1000;
-    audioEngine.update(now);
-    glRenderer.render(audioEngine.data);
-    const ad = audioEngine.data;
-    overlays.render({ time: glRenderer.time, bass: ad.bass, mid: ad.mid, high: ad.high, beat: ad.beat, beatTime: ad.beatTime });
+    try {
+      const now = performance.now() / 1000;
+      audioEngine.update(now);
+      if (!glRenderer.isContextLost) {
+        glRenderer.render(audioEngine.data);
+        const ad = audioEngine.data;
+        overlays.render({ time: glRenderer.time, bass: ad.bass, mid: ad.mid, high: ad.high, beat: ad.beat, beatTime: ad.beatTime });
+      }
+    } catch (e) {
+      console.error("Output render loop error:", e);
+    }
     requestAnimationFrame(loop);
   }
 
