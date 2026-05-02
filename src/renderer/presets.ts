@@ -16,6 +16,8 @@ export const shaderFiles: PresetDef[] = [
   { id: "00_camera_acid", name: "CAMERA ACID", key: "q" },
   { id: "00_camera_blur", name: "CAMERA BLUR", key: "w" },
   { id: "00_camera_strobe", name: "CAMERA STROBE", key: "e" },
+  { id: "00_camera_thermal", name: "CAMERA THERMAL", key: "r" },
+  { id: "00_camera_surveil", name: "CAMERA SURVEIL", key: "t" },
   { id: "01_glitch", name: "GLITCH" },
   { id: "02_plasma", name: "PLASMA" },
   { id: "03_kaleidoscope", name: "KALEIDOSCOPE" },

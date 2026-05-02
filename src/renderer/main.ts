@@ -149,6 +149,8 @@ async function main() {
     "00_camera_acid": "Q",
     "00_camera_blur": "W",
     "00_camera_strobe": "E",
+    "00_camera_thermal": "R",
+    "00_camera_surveil": "T",
   };
 
   function buildClipGrid() {
